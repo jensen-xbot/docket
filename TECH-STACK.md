@@ -33,6 +33,15 @@
 ## Integrations
 - **MVP:** None
 - **v1.0:** Apple Calendar (potential), Push Notifications
+- **v1.0-voice:** Siri Shortcuts, Apple Speech framework
+
+## Voice-to-Task (v1.0)
+- **Speech Recognition:** Apple SpeechAnalyzer (on-device) / OpenAI Whisper API (cloud)
+- **Audio Capture:** AVAudioEngine with buffer processing
+- **Transport:** WebSocket (WSS) for real-time streaming
+- **NLU:** GPT-4o-mini via Supabase Edge Functions
+- **TTS (Confirmation):** Apple AVSpeechSynthesizer
+- **Audio Format:** PCM → Opus compression for network
 
 ## Real-Time
 - **v1.0:** Supabase real-time subscriptions for sync

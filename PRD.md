@@ -15,11 +15,13 @@ Jon — a busy professional juggling sales work, side projects (Closelo), family
 - Single user, no backend needed
 
 ### v1.0 Definition of Done
-- Sync across devices via backend
+- Voice-to-task: Press button, speak naturally, confirm → task created
+- Agent confirmation: System confirms task details before creation
+- Natural language parsing: Extract title, due date, priority from speech
+- Cloud sync across devices (Supabase)
 - Due dates with notifications
-- Categories/projects for organization
 - Priority levels (high/medium/low)
-- Recurring tasks
+- Categories for organization
 
 ## Feature Requirements
 
@@ -32,25 +34,26 @@ Jon — a busy professional juggling sales work, side projects (Closelo), family
 6. Local persistence (SwiftData)
 
 ### Should-Have (v1.0)
-1. Due dates
-2. Categories/tags
-3. Priority levels
-4. Cloud sync (Supabase)
-5. Push notifications for due dates
+1. **Voice-to-Task (Primary v1.0 Feature)**
+2. Due dates
+3. Categories/tags
+4. Priority levels
+5. Cloud sync (Supabase)
 
 ### Could-Have (Future)
-1. Siri shortcuts
-2. Widgets
-3. Apple Watch app
-4. Subtasks
-5. Collaboration/sharing
+1. Push notifications for due dates
+2. Siri shortcuts
+3. Widgets
+4. Apple Watch app
+5. Subtasks
+6. Recurring tasks
+7. Collaboration/sharing
 
 ### Won't-Have (Explicitly Out of Scope)
 1. Collaboration/multi-user
-2. Natural language input
-3. AI suggestions
-4. Advanced filtering/search
-5. Attachments/files
+2. AI suggestions beyond voice parsing
+3. Advanced filtering/search
+4. Attachments/files
 
 ## User Flows
 

@@ -76,9 +76,38 @@ Each module has:
 
 ## Current Status
 
-**Phase:** 1 - Foundation
-**Next Module:** 1.1 - Project Setup
-**Status:** Ready to begin
+**Phase:** 4 - Device Testing  
+**Next Module:** 4.3 - Device Testing  
+**Status:** MVP Complete (Phases 1-4), awaiting user testing
+
+### Post-MVP Roadmap: Voice-to-Task (v1.0)
+
+See [VOICE-TO-TASK-PLAN.md](VOICE-TO-TASK-PLAN.md) for detailed architecture.
+
+### Phase 5: Voice Foundation (v1.0-pre)
+| # | Module | Description | Complexity | Prerequisites |
+|---|--------|-------------|------------|---------------|
+| 5.1 | **Speech Recognition Setup** | Speech framework, permissions, SpeechRecognitionManager | High | 4.3 |
+| 5.2 | **Audio Capture** | AVAudioEngine, buffer management, interruptions | High | 5.1 |
+| 5.3 | **Basic Transcription** | Real-time transcription display, controls | High | 5.2 |
+| 5.4 | **Voice UI Components** | Mic button, recording overlay, waveform | Medium | 5.3 |
+
+### Phase 6: Agent Integration (v1.0)
+| # | Module | Description | Complexity | Prerequisites |
+|---|--------|-------------|------------|---------------|
+| 6.1 | **Gateway/Tunnel Setup** | WebSocket client, secure connection, reconnection | High | 5.4 |
+| 6.2 | **Audio Streaming** | Compress chunks, stream to backend, buffer management | High | 6.1 |
+| 6.3 | **NLU Agent** | Backend intent classification, entity extraction | High | 6.2 |
+| 6.4 | **Confirmation System** | Parsed task preview, TTS confirmation, Yes/No handling | High | 6.3 |
+| 6.5 | **Task Creation Integration** | Agent creates SwiftData tasks, error handling | Medium | 6.4 |
+
+### Phase 7: Polish & Optimization (v1.0+)
+| # | Module | Description | Complexity | Prerequisites |
+|---|--------|-------------|------------|---------------|
+| 7.1 | **Voice Shortcuts** | Siri integration, custom intents | Medium | 6.5 |
+| 7.2 | **Offline Mode** | On-device recognition, local parsing | High | 7.1 |
+| 7.3 | **Advanced Parsing** | Recurring tasks, subtasks, context | High | 7.2 |
+| 7.4 | **Voice Feedback Loop** | Full voice agent, task review by voice | Medium | 7.3 |
 
 ## Documentation Review
 

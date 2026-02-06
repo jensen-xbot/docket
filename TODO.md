@@ -1,57 +1,63 @@
 # TODO: Docket
 
-## Phase: Setup
+## MVP (Phases 1-4) - ✅ COMPLETE
 - [x] Create project repository
-- [ ] Initialize Xcode project (SwiftUI, iOS 17+)
-- [ ] Set up project folder structure
-- [ ] Configure gitignore for Xcode
-- [ ] Set up Apple Developer account
-- [ ] Deploy initial scaffold to GitHub
+- [x] Initialize Xcode project (SwiftUI, iOS 17+)
+- [x] Set up project folder structure
+- [x] Configure gitignore for Xcode
+- [x] Create Task model (SwiftData)
+- [x] Build task list view
+- [x] Build create task view
+- [x] Build edit task view
+- [x] Implement complete/incomplete toggle
+- [x] Implement delete task
+- [x] Add local persistence (SwiftData)
+- [x] Basic UI polish (dark mode, animations)
+- [ ] Test on physical device (AWAITING USER)
 
-## Phase: Core (MVP)
-- [ ] Create Task model (SwiftData)
-- [ ] Build task list view
-- [ ] Build create task view
-- [ ] Build edit task view
-- [ ] Implement complete/incomplete toggle
-- [ ] Implement delete task
-- [ ] Add local persistence (SwiftData)
-- [ ] Basic UI polish (dark mode, animations)
-- [ ] Test on physical device
+## v1.0: Voice-to-Task (Phases 5-7)
 
-## Phase: Polish (v1.0)
+### Phase 5: Voice Foundation
+- [ ] Add Speech framework entitlement
+- [ ] Request microphone + speech permissions
+- [ ] Create SpeechRecognitionManager
+- [ ] Set up AVAudioEngine for capture
+- [ ] Implement audio buffer management
+- [ ] Build continuous transcription display
+- [ ] Create Voice UI (mic button, overlay)
+
+### Phase 6: Agent Integration
+- [ ] Design WebSocket gateway architecture
+- [ ] Implement secure WebSocket client
+- [ ] Audio compression (Opus/AAC)
+- [ ] Set up backend NLU service
+- [ ] Natural language → Task parsing
+- [ ] Build confirmation flow (visual + TTS)
+- [ ] Integrate task creation with agent
+
+### Phase 7: Polish & Advanced Features
+- [ ] Siri Shortcuts integration
+- [ ] Offline mode (on-device recognition)
+- [ ] Advanced parsing (recurring, subtasks)
+- [ ] Full voice agent feedback loop
+
+## Future / v2.0
 - [ ] Set up Supabase project
 - [ ] Implement Supabase Auth
 - [ ] Add cloud sync (Supabase real-time)
-- [ ] Add due dates
-- [ ] Add categories/tags
-- [ ] Add priority levels
-- [ ] Implement push notifications
+- [ ] Push notifications for due dates
 - [ ] Data migration from local to cloud
-- [ ] Add analytics (PostHog/Sentry)
+- [ ] App Store submission
 
-## Phase: Launch
-- [ ] App Store submission prep
-- [ ] Screenshots and app preview
-- [ ] App description and keywords
-- [ ] Privacy policy
-- [ ] Submit to App Store
-- [ ] Monitor for crashes/feedback
+## Research Completed
+- [x] Voice-to-text options (Apple Speech vs Whisper)
+- [x] Audio streaming architecture
+- [x] WebSocket gateway patterns
+- [x] NLU approaches for task extraction
+- See [VOICE-TO-TASK-PLAN.md](VOICE-TO-TASK-PLAN.md) for details
 
-## Blocked / Research
-- [ ] Learn SwiftData basics
-- [ ] Learn SwiftUI navigation patterns
-- [ ] Research Supabase Swift SDK
-
-## Timeline
-- **Target:** Soft target — learning project, quality over speed
-- **Week 1 Goal:** Working MVP with local persistence
-- **Risks:**
-  - Xcode/SwiftData version compatibility
-  - Apple Developer account activation delays
-  - Learning curve on SwiftUI
-
-## Notes
-- Focus on MVP first — resist v1.0 features until core works perfectly
-- Test early on real device (simulator doesn't catch all issues)
-- Document learnings as we go for future iOS projects
+## Next Steps
+1. User tests MVP in Xcode
+2. Review Voice-to-Task plan
+3. Prioritize v1.0 features
+4. Decide: Apple Speech vs Whisper API
