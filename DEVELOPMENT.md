@@ -80,34 +80,40 @@ Each module has:
 **Next Module:** 4.3 - Device Testing  
 **Status:** MVP Complete (Phases 1-4), awaiting user testing
 
-### Post-MVP Roadmap: Voice-to-Task (v1.0)
+### Post-MVP Roadmap
+
+**Priority: v1.0 = Cloud Sync Foundation → v1.1 = Voice-to-Task**
+
+### Phase 5: Cloud Sync Foundation (v1.0)
+| # | Module | Description | Complexity | Prerequisites |
+|---|--------|-------------|------------|---------------|
+| 5.1 | **Supabase Setup** | Project setup, database schema, RLS policies | Medium | 4.3 |
+| 5.2 | **Auth Implementation** | Supabase Auth, Apple Sign In, session management | High | 5.1 |
+| 5.3 | **Cloud Data Model** | Supabase tables, sync logic, conflict resolution | High | 5.2 |
+| 5.4 | **Bi-directional Sync** | SwiftData ↔ Supabase sync, offline queue | High | 5.3 |
+| 5.5 | **Due Dates & Notifications** | Local notifications, scheduled reminders | Medium | 5.4 |
+
+### Phase 6: Voice-to-Task (v1.1)
 
 See [VOICE-TO-TASK-PLAN.md](VOICE-TO-TASK-PLAN.md) for detailed architecture.
 
-### Phase 5: Voice Foundation (v1.0-pre)
 | # | Module | Description | Complexity | Prerequisites |
 |---|--------|-------------|------------|---------------|
-| 5.1 | **Speech Recognition Setup** | Speech framework, permissions, SpeechRecognitionManager | High | 4.3 |
-| 5.2 | **Audio Capture** | AVAudioEngine, buffer management, interruptions | High | 5.1 |
-| 5.3 | **Basic Transcription** | Real-time transcription display, controls | High | 5.2 |
-| 5.4 | **Voice UI Components** | Mic button, recording overlay, waveform | Medium | 5.3 |
+| 6.1 | **Speech Recognition Setup** | Speech framework, permissions, SpeechRecognitionManager | High | 5.5 |
+| 6.2 | **Audio Capture** | AVAudioEngine, buffer management, interruptions | High | 6.1 |
+| 6.3 | **Basic Transcription** | Apple SpeechAnalyzer integration, real-time display | High | 6.2 |
+| 6.4 | **Voice UI Components** | Mic button, recording overlay, transcription preview | Medium | 6.3 |
+| 6.5 | **NLU Integration** | Supabase Edge Function with GPT-4o-mini parsing | High | 6.4 |
+| 6.6 | **Visual Confirmation** | Parsed task preview card, user confirmation flow | Medium | 6.5 |
+| 6.7 | **Voice Task Creation** | Integrate parsed data into synced Task model | Medium | 6.6 |
 
-### Phase 6: Agent Integration (v1.0)
+### Phase 7: Voice Polish (v1.2)
 | # | Module | Description | Complexity | Prerequisites |
 |---|--------|-------------|------------|---------------|
-| 6.1 | **Gateway/Tunnel Setup** | WebSocket client, secure connection, reconnection | High | 5.4 |
-| 6.2 | **Audio Streaming** | Compress chunks, stream to backend, buffer management | High | 6.1 |
-| 6.3 | **NLU Agent** | Backend intent classification, entity extraction | High | 6.2 |
-| 6.4 | **Confirmation System** | Parsed task preview, TTS confirmation, Yes/No handling | High | 6.3 |
-| 6.5 | **Task Creation Integration** | Agent creates SwiftData tasks, error handling | Medium | 6.4 |
-
-### Phase 7: Polish & Optimization (v1.0+)
-| # | Module | Description | Complexity | Prerequisites |
-|---|--------|-------------|------------|---------------|
-| 7.1 | **Voice Shortcuts** | Siri integration, custom intents | Medium | 6.5 |
-| 7.2 | **Offline Mode** | On-device recognition, local parsing | High | 7.1 |
-| 7.3 | **Advanced Parsing** | Recurring tasks, subtasks, context | High | 7.2 |
-| 7.4 | **Voice Feedback Loop** | Full voice agent, task review by voice | Medium | 7.3 |
+| 7.1 | **Siri Shortcuts** | Custom intents, "Add task in Docket" | Medium | 6.7 |
+| 7.2 | **Advanced Parsing** | Recurring tasks, subtasks, context awareness | High | 7.1 |
+| 7.3 | **Enhanced Voice Options** | Whisper API fallback, multiple languages | Medium | 7.2 |
+| 7.4 | **Voice Feedback** | TTS confirmation responses (optional enhancement) | Low | 7.3 |
 
 ## Documentation Review
 

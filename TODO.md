@@ -15,49 +15,77 @@
 - [x] Basic UI polish (dark mode, animations)
 - [ ] Test on physical device (AWAITING USER)
 
-## v1.0: Voice-to-Task (Phases 5-7)
+## v1.0: Cloud Sync Foundation (Priority #1)
 
-### Phase 5: Voice Foundation
+### Phase 5: Cloud Infrastructure
+- [ ] Set up Supabase project
+- [ ] Create database schema (Tasks table)
+- [ ] Configure Row Level Security (RLS) policies
+- [ ] Implement Supabase Auth (email + Apple Sign In)
+- [ ] Create sync service (SwiftData ↔ Supabase)
+- [ ] Handle offline queue and conflict resolution
+- [ ] Add due dates with local notifications
+- [ ] Test sync across multiple devices
+
+**Why first:** Foundation must be solid before building voice features on top.
+
+## v1.1: Voice-to-Task (Priority #2)
+
+### Phase 6: Voice Foundation
 - [ ] Add Speech framework entitlement
 - [ ] Request microphone + speech permissions
-- [ ] Create SpeechRecognitionManager
+- [ ] Create SpeechRecognitionManager (Apple SpeechAnalyzer)
 - [ ] Set up AVAudioEngine for capture
 - [ ] Implement audio buffer management
 - [ ] Build continuous transcription display
 - [ ] Create Voice UI (mic button, overlay)
 
-### Phase 6: Agent Integration
-- [ ] Design WebSocket gateway architecture
-- [ ] Implement secure WebSocket client
-- [ ] Audio compression (Opus/AAC)
-- [ ] Set up backend NLU service
+### Phase 7: Agent Integration
+- [ ] Supabase Edge Function for NLU (GPT-4o-mini)
 - [ ] Natural language → Task parsing
-- [ ] Build confirmation flow (visual + TTS)
-- [ ] Integrate task creation with agent
+- [ ] Build visual confirmation flow (NOT TTS)
+- [ ] Integrate voice-created tasks into synced model
+- [ ] English only for v1.1
 
-### Phase 7: Polish & Advanced Features
+### Phase 8: Voice Polish
 - [ ] Siri Shortcuts integration
-- [ ] Offline mode (on-device recognition)
-- [ ] Advanced parsing (recurring, subtasks)
-- [ ] Full voice agent feedback loop
+- [ ] Advanced parsing (recurring tasks, subtasks)
+- [ ] Optional: Whisper API fallback for accuracy
+- [ ] Optional: TTS confirmation responses (v1.2)
+
+**Why second:** Built on cloud foundation, uses same Supabase backend.
 
 ## Future / v2.0
-- [ ] Set up Supabase project
-- [ ] Implement Supabase Auth
-- [ ] Add cloud sync (Supabase real-time)
-- [ ] Push notifications for due dates
-- [ ] Data migration from local to cloud
-- [ ] App Store submission
+- [ ] Widgets
+- [ ] Apple Watch app
+- [ ] Multiple languages for voice
+- [ ] Collaboration/sharing
+- [ ] App Store submission (after v1.0 testing)
+
+## Technical Decisions Made
+
+### Voice Architecture (v1.1)
+- **Transcription:** Apple SpeechAnalyzer (on-device, free, fast)
+- **Parsing:** GPT-4o-mini via Supabase Edge Function (~$5/month)
+- **Confirmation:** Visual only (not TTS agent)
+- **Language:** English only for v1.1
+- **Cost estimate:** ~$5/month @ 100 users (vs $13 with Whisper)
+
+### Cloud Architecture (v1.0)
+- **Backend:** Supabase (PostgreSQL + Auth + Realtime)
+- **Sync:** Bi-directional with offline queue
+- **Auth:** Apple Sign In + email/password
+- **Notifications:** Local notifications for due dates
 
 ## Research Completed
 - [x] Voice-to-text options (Apple Speech vs Whisper)
 - [x] Audio streaming architecture
-- [x] WebSocket gateway patterns
+- [x] WebSocket gateway patterns (for v1.1)
 - [x] NLU approaches for task extraction
-- See [VOICE-TO-TASK-PLAN.md](VOICE-TO-TASK-PLAN.md) for details
+- [x] Supabase sync strategies
+- See [VOICE-TO-TASK-PLAN.md](VOICE-TO-TASK-PLAN.md) for voice details
 
 ## Next Steps
 1. User tests MVP in Xcode
-2. Review Voice-to-Task plan
-3. Prioritize v1.0 features
-4. Decide: Apple Speech vs Whisper API
+2. Begin Phase 5.1: Supabase Setup (when ready)
+3. Complete cloud sync before starting voice work

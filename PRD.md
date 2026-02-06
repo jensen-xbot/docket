@@ -14,14 +14,22 @@ Jon — a busy professional juggling sales work, side projects (Closelo), family
 - Clean, native iOS UI
 - Single user, no backend needed
 
-### v1.0 Definition of Done
-- Voice-to-task: Press button, speak naturally, confirm → task created
-- Agent confirmation: System confirms task details before creation
-- Natural language parsing: Extract title, due date, priority from speech
+### v1.0 Definition of Done (Cloud Sync Foundation)
 - Cloud sync across devices (Supabase)
-- Due dates with notifications
+- User authentication (Apple Sign In + email)
+- Bi-directional sync with offline support
+- Due dates with local notifications
 - Priority levels (high/medium/low)
 - Categories for organization
+- Zero data loss guarantee
+
+### v1.1 Definition of Done (Voice-to-Task)
+- Voice-to-task: Press button, speak naturally, confirm → task created
+- Visual confirmation (preview card, tap to confirm)
+- Natural language parsing: Extract title, due date, priority from speech
+- Apple SpeechAnalyzer for transcription (on-device)
+- GPT-4o-mini via Supabase Edge Function for parsing
+- English only for v1.1
 
 ## Feature Requirements
 
@@ -33,21 +41,30 @@ Jon — a busy professional juggling sales work, side projects (Closelo), family
 5. View all tasks (active + completed)
 6. Local persistence (SwiftData)
 
-### Should-Have (v1.0)
-1. **Voice-to-Task (Primary v1.0 Feature)**
-2. Due dates
-3. Categories/tags
-4. Priority levels
-5. Cloud sync (Supabase)
+### Should-Have (v1.0) - Cloud Sync Foundation
+1. **Cloud sync across devices** (Primary v1.0 Feature)
+2. User authentication (Apple Sign In)
+3. Due dates
+4. Categories/tags
+5. Priority levels
+6. Local notifications
 
-### Could-Have (Future)
-1. Push notifications for due dates
-2. Siri shortcuts
-3. Widgets
-4. Apple Watch app
-5. Subtasks
-6. Recurring tasks
-7. Collaboration/sharing
+### Should-Have (v1.1) - Voice-to-Task
+1. **Voice-to-Task** (Primary v1.1 Feature)
+2. Apple SpeechAnalyzer transcription
+3. Visual confirmation flow
+4. Natural language task parsing
+5. Supabase Edge Function NLU
+
+### Could-Have (v1.2+)
+1. Siri shortcuts
+2. Advanced voice parsing (recurring, subtasks)
+3. Whisper API fallback option
+4. TTS confirmation responses
+5. Widgets
+6. Apple Watch app
+7. Multiple languages for voice
+8. Collaboration/sharing
 
 ### Won't-Have (Explicitly Out of Scope)
 1. Collaboration/multi-user
