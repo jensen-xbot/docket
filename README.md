@@ -39,6 +39,11 @@ docket/
 - Things 3 (polish)
 - Clear (gesture-based, RIP)
 
+## Project Links
+
+- **Repository:** https://github.com/jensen-xbot/docket
+- **Project Kanban:** https://github.com/users/jensen-xbot/projects/2
+
 ## Roadmap
 
 ### MVP (Now)
