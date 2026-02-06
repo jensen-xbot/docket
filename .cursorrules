@@ -7,6 +7,7 @@ Simple, fast iPhone app for managing your daily tasks without the noise.
 - Frontend: SwiftUI
 - Backend: Supabase (v1.0)
 - Database: SwiftData (MVP) → PostgreSQL (v1.0)
+- Minimum iOS: 17+
 
 ## Architecture Patterns
 - MVVM (Model-View-ViewModel) for SwiftUI
@@ -18,18 +19,75 @@ Simple, fast iPhone app for managing your daily tasks without the noise.
 - **Naming:** Swift style — PascalCase types, camelCase variables/functions
 - **File structure:** Feature-based grouping (Tasks/, Auth/, Common/)
 - **State management:** @Observable ViewModels, injected as environment objects
+- **Access control:** Use `private` and `fileprivate` appropriately
+- **Swift version:** 6.0+ with strict concurrency checking
 
-## Key Files (Coming Soon)
-- `DocketApp.swift` — App entry point
-- `Task.swift` — Data model
-- `TaskListView.swift` — Main task list
-- `TaskDetailView.swift` — Create/edit task
+## Code Quality
+- **Error Handling:** Use `throws` for recoverable errors, `Result` for async operations, never force unwrap
+- **SwiftData:** All models must conform to `@Model`, use `@Attribute(.unique)` for IDs
+- **Previews:** Every view must have a `#Preview` with sample data
+- **Comments:** Document public APIs only; code should be self-documenting
+
+## UI/UX Guidelines
+- **Quick capture:** 2-3 taps max to create a task
+- **Visual hierarchy:** Use color coding for priority and urgency
+  - **Priority:** Low (gray) → Medium (orange) → High (red)
+  - **Due dates:** Far future (green) → Within 3 days (yellow) → Overdue/past (red)
+- **Animations:** Subtle, native-feeling transitions (0.2-0.3s)
+- **Empty states:** Friendly copy, clear call-to-action
+- **Dark mode:** Support both light and dark from day 1
+- **Accessibility:** Minimum 44pt tap targets, Dynamic Type support
+
+## Data Model
+```swift
+@Model
+class Task {
+    @Attribute(.unique) var id: UUID
+    var title: String
+    var isCompleted: Bool
+    var createdAt: Date
+    var dueDate: Date?
+    var priority: Priority // low, medium, high
+    var category: String?
+    var notes: String?
+    var completedAt: Date?
+}
+
+enum Priority: Int, CaseIterable {
+    case low = 0      // gray
+    case medium = 1   // orange  
+    case high = 2     // red
+}
+```
+
+## Key Files
+- `DocketApp.swift` — App entry point with SwiftData container setup
+- `Models/Task.swift` — Task model with helper properties
+- `Views/TaskListView.swift` — Main task list with filtering
+- `Views/TaskRowView.swift` — Individual task cell
+- `Views/AddTaskView.swift` — Create/edit task sheet
+- `ViewModels/TaskListViewModel.swift` — Business logic
+- `Utilities/Date+Extensions.swift` — Due date formatting and color logic
+- `Utilities/Color+Extensions.swift` — Priority/urgency color helpers
+
+## Development Workflow
+- Build iteratively: Model → ViewModel → View → Preview → Test on device
+- Always test dark mode and light mode
+- Check dynamic type (accessibility sizes) on each view
+- Use SF Symbols for icons (consistent with iOS)
+- Prefer native SwiftUI components over custom views
+
+## Testing Strategy
+- Unit tests for ViewModels (business logic)
+- UI tests for critical flows (create → complete → delete)
+- Manual testing: light/dark mode, rotation, accessibility sizes
 
 ## Context
 This app is for Jon — a busy professional juggling sales work, side projects (Closelo), family, and personal routines. Needs quick capture (2-3 taps) and clear organization without friction.
 
 ## Development Notes
-- iOS 17+ target (latest SwiftUI features)
-- Dark mode from day 1 (SwiftUI handles this)
-- Focus on MVP first — local persistence only
-- v1.0 adds cloud sync via Supabase
+- iOS 17+ target (latest SwiftUI features like `@Observable` macro)
+- Dark mode from day 1 (SwiftUI handles this via `@Environment(\.colorScheme)`)
+- Focus on MVP first — local persistence only with SwiftData
+- v1.0 adds cloud sync via Supabase with data migration
+- PowerSync is an option if offline-first becomes critical before v1.0
