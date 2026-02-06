@@ -1,0 +1,35 @@
+# Project: Docket
+
+## Overview
+Simple, fast iPhone app for managing your daily tasks without the noise.
+
+## Tech Stack
+- Frontend: SwiftUI
+- Backend: Supabase (v1.0)
+- Database: SwiftData (MVP) → PostgreSQL (v1.0)
+
+## Architecture Patterns
+- MVVM (Model-View-ViewModel) for SwiftUI
+- Repository pattern for data layer abstraction
+- SwiftData for local persistence
+- Supabase client for remote sync (v1.0)
+
+## Conventions
+- **Naming:** Swift style — PascalCase types, camelCase variables/functions
+- **File structure:** Feature-based grouping (Tasks/, Auth/, Common/)
+- **State management:** @Observable ViewModels, injected as environment objects
+
+## Key Files (Coming Soon)
+- `DocketApp.swift` — App entry point
+- `Task.swift` — Data model
+- `TaskListView.swift` — Main task list
+- `TaskDetailView.swift` — Create/edit task
+
+## Context
+This app is for Jon — a busy professional juggling sales work, side projects (Closelo), family, and personal routines. Needs quick capture (2-3 taps) and clear organization without friction.
+
+## Development Notes
+- iOS 17+ target (latest SwiftUI features)
+- Dark mode from day 1 (SwiftUI handles this)
+- Focus on MVP first — local persistence only
+- v1.0 adds cloud sync via Supabase
