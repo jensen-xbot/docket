@@ -58,7 +58,7 @@ struct TaskListView: View {
     @State private var taskToEdit: Task?
     @State private var taskToShare: Task?
     @State private var syncEngine: SyncEngine?
-    @State private var editMode: EditMode = .active
+    @State private var editMode: EditMode = .inactive
     
     private var filteredTasks: [Task] {
         viewModel.filteredTasks(from: allTasks)
@@ -100,6 +100,10 @@ struct TaskListView: View {
                         if let syncEngine = syncEngine, syncEngine.isSyncing {
                             ProgressView()
                                 .scaleEffect(0.8)
+                        }
+
+                        Button(editMode == .active ? "Done" : "Reorder") {
+                            editMode = editMode == .active ? .inactive : .active
                         }
 
                         // Profile

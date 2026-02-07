@@ -12,6 +12,7 @@ enum ShareMethod: String, CaseIterable {
 
 // MARK: - ShareTaskView
 
+@MainActor
 struct ShareTaskView: View {
     @Environment(\.dismiss) private var dismiss
     
@@ -410,7 +411,7 @@ struct MailComposeView: UIViewControllerRepresentable {
     let recipient: String
     let subject: String
     let body: String
-    let onFinish: @Sendable (MFMailComposeResult) -> Void
+    let onFinish: @MainActor (MFMailComposeResult) -> Void
     
     func makeUIViewController(context: Context) -> MFMailComposeViewController {
         let vc = MFMailComposeViewController()
@@ -426,11 +427,15 @@ struct MailComposeView: UIViewControllerRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(onFinish: onFinish) }
     
     class Coordinator: NSObject, @unchecked Sendable, MFMailComposeViewControllerDelegate {
-        let onFinish: @Sendable (MFMailComposeResult) -> Void
-        init(onFinish: @escaping @Sendable (MFMailComposeResult) -> Void) { self.onFinish = onFinish }
+        let onFinish: @MainActor (MFMailComposeResult) -> Void
+        init(onFinish: @escaping @MainActor (MFMailComposeResult) -> Void) { self.onFinish = onFinish }
         func mailComposeController(_ controller: MFMailComposeViewController, didFinishWith result: MFMailComposeResult, error: Error?) {
-            onFinish(result)
-            controller.dismiss(animated: true)
+            _Concurrency.Task {
+                await MainActor.run {
+                    onFinish(result)
+                    controller.dismiss(animated: true)
+                }
+            }
         }
     }
 }
@@ -440,7 +445,7 @@ struct MailComposeView: UIViewControllerRepresentable {
 struct TextComposeView: UIViewControllerRepresentable {
     let recipient: String
     let body: String
-    let onFinish: @Sendable (MessageComposeResult) -> Void
+    let onFinish: @MainActor (MessageComposeResult) -> Void
     
     func makeUIViewController(context: Context) -> MFMessageComposeViewController {
         let vc = MFMessageComposeViewController()
@@ -455,11 +460,15 @@ struct TextComposeView: UIViewControllerRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(onFinish: onFinish) }
     
     class Coordinator: NSObject, @unchecked Sendable, MFMessageComposeViewControllerDelegate {
-        let onFinish: @Sendable (MessageComposeResult) -> Void
-        init(onFinish: @escaping @Sendable (MessageComposeResult) -> Void) { self.onFinish = onFinish }
+        let onFinish: @MainActor (MessageComposeResult) -> Void
+        init(onFinish: @escaping @MainActor (MessageComposeResult) -> Void) { self.onFinish = onFinish }
         func messageComposeViewController(_ controller: MFMessageComposeViewController, didFinishWith result: MessageComposeResult) {
-            onFinish(result)
-            controller.dismiss(animated: true)
+            _Concurrency.Task {
+                await MainActor.run {
+                    onFinish(result)
+                    controller.dismiss(animated: true)
+                }
+            }
         }
     }
 }
