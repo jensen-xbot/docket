@@ -13,7 +13,7 @@ final class NotificationManager {
     
     func scheduleNotification(for task: Task) async {
         let identifier = notificationId(for: task.id)
-        await center.removePendingNotificationRequests(withIdentifiers: [identifier])
+        center.removePendingNotificationRequests(withIdentifiers: [identifier])
         
         guard let dueDate = task.dueDate, !task.isCompleted else { return }
         
@@ -34,7 +34,7 @@ final class NotificationManager {
     
     func cancelNotification(taskId: UUID) async {
         let identifier = notificationId(for: taskId)
-        await center.removePendingNotificationRequests(withIdentifiers: [identifier])
+        center.removePendingNotificationRequests(withIdentifiers: [identifier])
     }
     
     func scheduleSharedTaskNotification(from sender: String, taskTitle: String) async {

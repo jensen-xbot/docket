@@ -22,10 +22,24 @@ class Task {
     var completedAt: Date?
     var isPinned: Bool
     var sortOrder: Int
-    @Attribute(.transformable) var checklistItems: [ChecklistItem]?
+    var checklistItemsData: Data?
     var isShared: Bool
     var syncStatus: Int // SyncStatus rawValue
     var updatedAt: Date
+    
+    var checklistItems: [ChecklistItem]? {
+        get {
+            guard let data = checklistItemsData else { return nil }
+            return try? JSONDecoder().decode([ChecklistItem].self, from: data)
+        }
+        set {
+            if let items = newValue, !items.isEmpty {
+                checklistItemsData = try? JSONEncoder().encode(items)
+            } else {
+                checklistItemsData = nil
+            }
+        }
+    }
     
     init(
         id: UUID = UUID(),
@@ -59,7 +73,11 @@ class Task {
         self.completedAt = completedAt
         self.isPinned = isPinned
         self.sortOrder = sortOrder
-        self.checklistItems = checklistItems
+        if let items = checklistItems, !items.isEmpty {
+            self.checklistItemsData = try? JSONEncoder().encode(items)
+        } else {
+            self.checklistItemsData = nil
+        }
         self.isShared = isShared
         self.syncStatus = syncStatus.rawValue
         self.updatedAt = updatedAt

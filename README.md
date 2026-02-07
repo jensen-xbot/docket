@@ -20,6 +20,7 @@ This is a learning project — a training ground for building full-stack iOS app
 - **Database:** SwiftData + Supabase (sync)
 - **Auth:** Supabase Auth (Apple, email magic link)
 - **Notifications:** UserNotifications (local reminders)
+- **Sharing:** MessageUI (email + SMS), Contacts framework (contact picker)
 - **Platform:** iOS (iPhone)
 
 ## Project Structure
@@ -55,7 +56,7 @@ docket/
 - Categories + priorities
 - Pin + manual reorder
 - Grocery/Shopping templates + checklists
-- Task sharing (email invite flow)
+- Task sharing (email + text invite flow)
 - Profile hub (templates, notifications, contacts)
 
 ## Getting Started

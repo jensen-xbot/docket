@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import _Concurrency
 
 struct ProfileView: View {
@@ -15,6 +16,11 @@ struct ProfileView: View {
     @AppStorage("notifications.remindersEnabled") private var remindersEnabled = true
     @AppStorage("notifications.shareAlertsEnabled") private var shareAlertsEnabled = true
     @AppStorage("notifications.defaultReminderMinutes") private var defaultReminderMinutes = 0
+    
+    init(authManager: AuthManager) {
+        self.authManager = authManager
+        _stores = Query()
+    }
     
     var body: some View {
         List {
@@ -96,7 +102,9 @@ struct ProfileView: View {
             do {
                 let session = try await SupabaseConfig.client.auth.session
                 userEmail = session.user.email ?? "—"
-                if let name = session.user.userMetadata["full_name"] as? String, !name.isEmpty {
+                if let metadata = session.user.userMetadata["full_name"],
+                   case let .string(name) = metadata,
+                   !name.isEmpty {
                     userDisplayName = name
                 } else {
                     userDisplayName = "Account"
@@ -133,4 +141,5 @@ struct ContactCountRow: Codable {
 
 #Preview {
     ProfileView(authManager: AuthManager())
+        .modelContainer(for: [Task.self, GroceryStore.self], inMemory: true)
 }

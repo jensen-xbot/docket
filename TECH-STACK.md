@@ -30,6 +30,7 @@
 
 ## Integrations
 - **Current:** UserNotifications (local reminders)
+- **Current:** MessageUI (email/SMS compose), Contacts (device picker)
 - **Near-term:** Supabase Realtime for shared tasks
 - **Voice-to-Task:** Siri Shortcuts, Apple Speech framework
 

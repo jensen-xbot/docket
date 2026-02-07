@@ -83,7 +83,8 @@ Each module has:
 ### Current Implementation Notes
 - Profile hub added for templates, notifications, and contacts management.
 - Grocery/Shopping categories support checklists and reusable store templates.
-- Task sharing uses contacts + invite flow (Supabase tables + share sheet UI).
+- Task sharing uses contacts + invite flow (email + SMS compose, Supabase tables).
+- Contacts import via device picker (requires Contacts permission key in Info.plist).
 
 ### Post-MVP Roadmap
 

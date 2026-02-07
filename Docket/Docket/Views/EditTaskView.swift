@@ -5,6 +5,7 @@ import _Concurrency
 struct EditTaskView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Query(sort: \GroceryStore.name) private var groceryTemplates: [GroceryStore]
     
     @Bindable var task: Task
     
@@ -17,10 +18,20 @@ struct EditTaskView: View {
     @State private var category: String = ""
     @State private var notes: String = ""
     @State private var checklistItems: [ChecklistItem] = []
+    @State private var selectedStore: String = ""
     @State private var showDeleteConfirm = false
+    @State private var isEditingCategory = false
+    @State private var loadedTemplateName: String? = nil
+    
+    // Save template prompt
+    @State private var showSaveTemplate = false
+    @State private var templateName: String = ""
+    @State private var pendingSave = false
     
     @FocusState private var titleFocused: Bool
     @FocusState private var notesFocused: Bool
+    
+    private let defaultStores = ["Costco", "Metro", "IGA", "Loblaws", "Maxi"]
     
     private var isValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -34,11 +45,123 @@ struct EditTaskView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    // Category (chip picker)
-                    CategoryPickerView(selectedCategory: $category)
-                        .onChange(of: category) {
-                            updateTitleForCategory()
+                    // Category & Store — collapsed or expanded
+                    if isEditingCategory {
+                        CategoryPickerView(selectedCategory: $category)
+                            .onChange(of: category) {
+                                updateTitleForCategory()
+                            }
+                        
+                        if isGroceryCategory {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Store")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                FlowLayout(spacing: 8) {
+                                    ForEach(defaultStores, id: \.self) { store in
+                                        Button {
+                                            if selectedStore == store {
+                                                selectedStore = ""
+                                            } else {
+                                                selectedStore = store
+                                            }
+                                            updateGroceryTitle()
+                                        } label: {
+                                            Text(store)
+                                                .font(.subheadline)
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 6)
+                                                .background(selectedStore == store ? Color.orange : Color(.systemGray6))
+                                                .foregroundStyle(selectedStore == store ? .white : .primary)
+                                                .cornerRadius(16)
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Saved templates
+                            if !availableTemplates.isEmpty {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Load a Template")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                    FlowLayout(spacing: 8) {
+                                        ForEach(availableTemplates) { template in
+                                            Button {
+                                                loadTemplate(template)
+                                            } label: {
+                                                HStack(spacing: 4) {
+                                                    Image(systemName: "doc.on.doc")
+                                                        .font(.caption2)
+                                                    Text("\(template.name) (\(template.items.count))")
+                                                        .font(.subheadline)
+                                                }
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 6)
+                                                .background(loadedTemplateName == template.name ? Color.green.opacity(0.2) : Color(.systemGray6))
+                                                .foregroundStyle(loadedTemplateName == template.name ? .green : .primary)
+                                                .cornerRadius(16)
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 16)
+                                                        .stroke(loadedTemplateName == template.name ? Color.green.opacity(0.5) : Color.clear, lineWidth: 1)
+                                                )
+                                            }
+                                        }
+                                    }
+                                    
+                                    if let loaded = loadedTemplateName {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .font(.caption2)
+                                                .foregroundStyle(.green)
+                                            Text("Loaded: \(loaded)")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                }
+                            }
                         }
+                        
+                        Button("Done") {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                isEditingCategory = false
+                            }
+                        }
+                        .font(.subheadline)
+                    } else {
+                        HStack {
+                            if !category.isEmpty {
+                                Label {
+                                    HStack(spacing: 4) {
+                                        Text(category)
+                                        if !selectedStore.isEmpty {
+                                            Text("·")
+                                                .foregroundStyle(.secondary)
+                                            Text(selectedStore)
+                                        }
+                                    }
+                                } icon: {
+                                    Image(systemName: "tag.fill")
+                                        .foregroundStyle(.green)
+                                }
+                                .font(.subheadline)
+                            } else {
+                                Text("No category")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Button("Edit") {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    isEditingCategory = true
+                                }
+                            }
+                            .font(.subheadline)
+                        }
+                    }
                     
                     Divider()
                     
@@ -66,7 +189,7 @@ struct EditTaskView: View {
                     
                     Divider()
                     
-                    // Priority (dismisses keyboard on tap)
+                    // Priority
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Priority")
                             .font(.subheadline)
@@ -77,10 +200,6 @@ struct EditTaskView: View {
                             }
                         }
                         .pickerStyle(.segmented)
-                        .onChange(of: priority) {
-                            titleFocused = false
-                            notesFocused = false
-                        }
                     }
                     
                     Divider()
@@ -92,9 +211,7 @@ struct EditTaskView: View {
                                 .font(.subheadline)
                         }
                         .onChange(of: hasDueDate) {
-                            if !hasDueDate {
-                                hasTime = false
-                            }
+                            if !hasDueDate { hasTime = false }
                         }
                         if hasDueDate {
                             DatePicker("", selection: $dueDate, displayedComponents: [.date])
@@ -143,6 +260,10 @@ struct EditTaskView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 200)
             }
+            .onTapGesture {
+                titleFocused = false
+                notesFocused = false
+            }
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Edit Task")
             .toolbarTitleDisplayMode(.inline)
@@ -160,6 +281,21 @@ struct EditTaskView: View {
                 Button("Delete", role: .destructive) { deleteTask() }
                 Button("Cancel", role: .cancel) { }
             }
+            .alert("Save as Template?", isPresented: $showSaveTemplate) {
+                TextField("Template name", text: $templateName)
+                Button("Save") {
+                    saveTemplate()
+                    finalizeUpdate()
+                }
+                Button("Skip") {
+                    finalizeUpdate()
+                }
+                Button("Cancel", role: .cancel) {
+                    pendingSave = false
+                }
+            } message: {
+                Text("Save these \(checklistItems.count) items as a grocery template for next time?")
+            }
             .onAppear {
                 title = task.title
                 priority = task.priority
@@ -170,13 +306,23 @@ struct EditTaskView: View {
                 category = task.category ?? ""
                 notes = task.notes ?? ""
                 checklistItems = task.checklistItems ?? []
-                titleFocused = true
-                updateTitleForCategory()
+                parseStoreFromTitle()
             }
         }
     }
     
     private func updateTask() {
+        // Check if we should offer to save template
+        if isChecklistCategory && !checklistItems.isEmpty && itemsDifferFromTemplate() {
+            pendingSave = true
+            templateName = selectedStore.isEmpty ? "My List" : selectedStore
+            showSaveTemplate = true
+        } else {
+            finalizeUpdate()
+        }
+    }
+    
+    private func finalizeUpdate() {
         task.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         task.priority = priority
         task.dueDate = hasDueDate ? (hasTime ? combineDateAndTime(date: dueDate, time: dueTime) : dueDate) : nil
@@ -190,6 +336,7 @@ struct EditTaskView: View {
         _Concurrency.Task {
             await NotificationManager.shared.scheduleNotification(for: task)
         }
+        pendingSave = false
         dismiss()
     }
     
@@ -201,20 +348,90 @@ struct EditTaskView: View {
         dismiss()
     }
     
+    private func saveTemplate() {
+        let name = templateName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        
+        let itemNames = checklistItems.sorted { $0.sortOrder < $1.sortOrder }.map { $0.name }
+        
+        if let existing = groceryTemplates.first(where: { $0.name.lowercased() == name.lowercased() }) {
+            existing.items = itemNames
+            existing.updatedAt = Date()
+        } else {
+            let store = GroceryStore(name: name, items: itemNames)
+            modelContext.insert(store)
+        }
+    }
+    
+    private var availableTemplates: [GroceryStore] {
+        groceryTemplates.filter { !$0.items.isEmpty }
+    }
+    
+    private func loadTemplate(_ template: GroceryStore) {
+        checklistItems = template.items.enumerated().map { index, name in
+            ChecklistItem(id: UUID(), name: name, isChecked: false, sortOrder: index)
+        }
+        loadedTemplateName = template.name
+        if defaultStores.contains(where: { $0.lowercased() == template.name.lowercased() }) {
+            selectedStore = defaultStores.first(where: { $0.lowercased() == template.name.lowercased() }) ?? ""
+            updateGroceryTitle()
+        }
+    }
+    
+    private func itemsDifferFromTemplate() -> Bool {
+        let currentNames = checklistItems.sorted { $0.sortOrder < $1.sortOrder }.map { $0.name }
+        for template in groceryTemplates {
+            if template.items == currentNames {
+                return false
+            }
+        }
+        return true
+    }
+    
     private func updateTitleForCategory() {
         let trimmedCategory = category.trimmingCharacters(in: .whitespacesAndNewlines)
         let lowercased = trimmedCategory.lowercased()
         let special = ["groceries", "shopping"]
         guard special.contains(lowercased) else { return }
         let currentTitle = title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if currentTitle.isEmpty || special.contains(currentTitle) {
-            title = trimmedCategory.isEmpty ? "" : trimmedCategory.capitalized
+        if currentTitle.isEmpty || special.contains(currentTitle) || currentTitle.hasPrefix("groceries") || currentTitle.hasPrefix("shopping") {
+            if selectedStore.isEmpty {
+                title = trimmedCategory.isEmpty ? "" : trimmedCategory.capitalized
+            } else {
+                title = "\(trimmedCategory.capitalized) - \(selectedStore)"
+            }
+        }
+    }
+    
+    private func updateGroceryTitle() {
+        let base = category.trimmingCharacters(in: .whitespacesAndNewlines).capitalized
+        if selectedStore.isEmpty {
+            title = base
+        } else {
+            title = "\(base) - \(selectedStore)"
+        }
+    }
+    
+    private func parseStoreFromTitle() {
+        let currentTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if currentTitle.lowercased().hasPrefix("groceries - ") || currentTitle.lowercased().hasPrefix("shopping - ") {
+            let parts = currentTitle.components(separatedBy: " - ")
+            if parts.count >= 2 {
+                let storePart = parts.dropFirst().joined(separator: " - ").trimmingCharacters(in: .whitespacesAndNewlines)
+                if defaultStores.contains(where: { $0.lowercased() == storePart.lowercased() }) {
+                    selectedStore = defaultStores.first(where: { $0.lowercased() == storePart.lowercased() }) ?? ""
+                }
+            }
         }
     }
     
     private var isChecklistCategory: Bool {
         let lowercased = category.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return lowercased == "groceries" || lowercased == "shopping"
+    }
+    
+    private var isGroceryCategory: Bool {
+        category.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "groceries"
     }
     
     private func combineDateAndTime(date: Date, time: Date) -> Date {
@@ -230,5 +447,5 @@ struct EditTaskView: View {
 #Preview {
     let task = Task(title: "Sample Task", priority: .high)
     return EditTaskView(task: task)
-        .modelContainer(for: Task.self, inMemory: true)
+        .modelContainer(for: [Task.self, GroceryStore.self], inMemory: true)
 }

@@ -32,6 +32,7 @@
 		8E9C0F1B2A3B4C5D6E7F0125 /* GroceryItemsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F021D /* GroceryItemsView.swift */; };
 		8E9C0F1B2A3B4C5D6E7F0126 /* ShareTaskView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F021E /* ShareTaskView.swift */; };
 		8E9C0F1B2A3B4C5D6E7F0127 /* ContactsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F021F /* ContactsListView.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0128 /* ContactInsert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0220 /* ContactInsert.swift */; };
 		AD6606E62F36F09B004CEBFE /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = AD6606E52F36F09B004CEBFE /* Supabase */; };
 /* End PBXBuildFile section */
 
@@ -62,6 +63,7 @@
 		8E9C0F1B2A3B4C5D6E7F021D /* GroceryItemsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroceryItemsView.swift; sourceTree = "<group>"; };
 		8E9C0F1B2A3B4C5D6E7F021E /* ShareTaskView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareTaskView.swift; sourceTree = "<group>"; };
 		8E9C0F1B2A3B4C5D6E7F021F /* ContactsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsListView.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F0220 /* ContactInsert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactInsert.swift; sourceTree = "<group>"; };
 		AD6606E72F36F4F0004CEBFE /* Docket.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Docket.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -114,6 +116,7 @@
 			children = (
 				8E9C0F1B2A3B4C5D6E7F0202 /* Task.swift */,
 				8E9C0F1B2A3B4C5D6E7F0218 /* GroceryStore.swift */,
+				8E9C0F1B2A3B4C5D6E7F0220 /* ContactInsert.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -249,6 +252,7 @@
 			files = (
 				8E9C0F1B2A3B4C5D6E7F0101 /* DocketApp.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0102 /* Task.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0128 /* ContactInsert.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0112 /* SupabaseConfig.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0113 /* AuthManager.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0114 /* SyncEngine.swift in Sources */,
@@ -404,6 +408,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Docket;
+				INFOPLIST_KEY_NSContactsUsageDescription = "Docket uses your contacts to quickly share tasks with friends and family.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -429,6 +434,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Docket;
+				INFOPLIST_KEY_NSContactsUsageDescription = "Docket uses your contacts to quickly share tasks with friends and family.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

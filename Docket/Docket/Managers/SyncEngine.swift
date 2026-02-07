@@ -35,34 +35,35 @@ class SyncEngine {
                 .execute()
                 .value
             
-            let sharedIds: [UUID] = {
-                do {
-                    let shares: [TaskShareRow] = try await supabase
-                        .from("task_shares")
-                        .select()
-                        .eq("shared_with_id", value: userId)
-                        .eq("status", value: "accepted")
-                        .execute()
-                        .value
-                    return shares.map { $0.taskId }
-                } catch {
-                    return []
-                }
-            }()
+            let sharedIds: [UUID]
+            do {
+                let shares: [TaskShareRow] = try await supabase
+                    .from("task_shares")
+                    .select()
+                    .eq("shared_with_id", value: userId)
+                    .eq("status", value: "accepted")
+                    .execute()
+                    .value
+                sharedIds = shares.map { $0.taskId }
+            } catch {
+                sharedIds = []
+            }
             
-            let sharedResponse: [TaskDTO] = {
-                guard !sharedIds.isEmpty else { return [] }
+            let sharedResponse: [TaskDTO]
+            if sharedIds.isEmpty {
+                sharedResponse = []
+            } else {
                 do {
-                    return try await supabase
+                    sharedResponse = try await supabase
                         .from("tasks")
                         .select()
                         .in("id", values: sharedIds.map { $0.uuidString })
                         .execute()
                         .value
                 } catch {
-                    return []
+                    sharedResponse = []
                 }
-            }()
+            }
             
             let descriptor = FetchDescriptor<Task>()
             let localTasks = try? modelContext.fetch(descriptor)

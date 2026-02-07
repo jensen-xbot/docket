@@ -58,6 +58,7 @@ struct TaskListView: View {
     @State private var taskToEdit: Task?
     @State private var taskToShare: Task?
     @State private var syncEngine: SyncEngine?
+    @State private var editMode: EditMode = .active
     
     private var filteredTasks: [Task] {
         viewModel.filteredTasks(from: allTasks)
@@ -249,18 +250,6 @@ struct TaskListView: View {
                         } label: { Label("Delete", systemImage: "trash") }
                     }
             }
-            .onDelete { indexSet in
-                let tasksInfo = indexSet.map { (filteredTasks[$0].id, filteredTasks[$0].syncStatus) }
-                for index in indexSet {
-                    modelContext.delete(filteredTasks[index])
-                }
-                _Concurrency.Task {
-                    for (taskId, syncStatus) in tasksInfo {
-                        await NotificationManager.shared.cancelNotification(taskId: taskId)
-                        await syncEngine?.deleteRemoteTask(id: taskId, syncStatus: syncStatus)
-                    }
-                }
-            }
             .onMove { indices, newOffset in
                 var reordered = filteredTasks
                 reordered.move(fromOffsets: indices, toOffset: newOffset)
@@ -272,7 +261,7 @@ struct TaskListView: View {
             }
         }
         .listStyle(.plain)
-        .environment(\.editMode, .constant(.active))
+        .environment(\.editMode, $editMode)
     }
     
     private func syncAll() async {

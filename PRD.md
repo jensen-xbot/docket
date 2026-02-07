@@ -23,7 +23,7 @@ Jon — a busy professional juggling sales work, side projects (Closelo), family
 - Categories for organization
 - Pin + manual reorder
 - Grocery/Shopping templates + checklists
-- Task sharing with contacts + invite flow
+- Task sharing with contacts + invite flow (email + text)
 - Profile hub for templates + notifications + contacts
 - Zero data loss guarantee
 
@@ -54,7 +54,7 @@ Jon — a busy professional juggling sales work, side projects (Closelo), family
 6. Local notifications
 7. Pin + manual reorder
 8. Grocery/Shopping templates + checklist items
-9. Task sharing (email invite flow)
+9. Task sharing (email + text invite flow)
 10. Profile hub (templates, notifications, contacts)
 
 ### Should-Have (v1.1) - Voice-to-Task

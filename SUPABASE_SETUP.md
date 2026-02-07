@@ -10,6 +10,7 @@
   - `003_grocery_templates.sql` (grocery_stores + checklist_items)
   - `004_add_has_time.sql` (has_time flag)
   - `005_sharing.sql` (contacts + task_shares + invitations)
+  - `006_contacts_phone.sql` (contacts phone number)
 
 ## Manual Configuration Steps
 
@@ -76,6 +77,7 @@ Run these in order in Supabase SQL Editor:
 3. `supabase/migrations/003_grocery_templates.sql`
 4. `supabase/migrations/004_add_has_time.sql`
 5. `supabase/migrations/005_sharing.sql`
+6. `supabase/migrations/006_contacts_phone.sql`
 
 ### 6. Test the Setup
 
@@ -109,6 +111,8 @@ Run these in order in Supabase SQL Editor:
 ### Sharing not working
 - Verify `task_shares` and `contacts` tables exist (migration 005)
 - Ensure RLS policies are enabled for `task_shares` and `contacts`
+- Verify `contacts.contact_phone` exists (migration 006)
+- Ensure `profiles` table has `email` column for share lookup
 
 ### Grocery templates missing
 - Verify `grocery_stores` table exists (migration 003)

@@ -6,7 +6,7 @@ class GroceryStore {
     @Attribute(.unique) var id: UUID
     var userId: String?
     var name: String
-    @Attribute(.transformable) var items: [String]
+    var items: [String]
     var createdAt: Date
     var updatedAt: Date
     
