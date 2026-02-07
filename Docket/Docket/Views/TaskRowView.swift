@@ -4,6 +4,7 @@ import _Concurrency
 
 struct TaskRowView: View {
     @Bindable var task: Task
+    var syncEngine: SyncEngine?
     var onShare: (() -> Void)? = nil
     
     var body: some View {
@@ -109,6 +110,7 @@ struct TaskRowView: View {
         }
         _Concurrency.Task {
             await NotificationManager.shared.scheduleNotification(for: task)
+            await syncEngine?.pushTask(task)
         }
     }
     
@@ -117,6 +119,9 @@ struct TaskRowView: View {
             task.isPinned.toggle()
             task.updatedAt = Date()
             task.syncStatus = SyncStatus.pending.rawValue
+        }
+        _Concurrency.Task {
+            await syncEngine?.pushTask(task)
         }
     }
 }

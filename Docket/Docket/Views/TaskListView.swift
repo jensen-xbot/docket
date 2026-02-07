@@ -217,7 +217,7 @@ struct TaskListView: View {
     private var taskList: some View {
         List {
             ForEach(filteredTasks) { task in
-                TaskRowView(task: task, onShare: {
+                TaskRowView(task: task, syncEngine: syncEngine, onShare: {
                     taskToShare = task
                 })
                     .contentShape(Rectangle())
@@ -261,6 +261,13 @@ struct TaskListView: View {
                     task.sortOrder = index
                     task.updatedAt = Date()
                     task.syncStatus = SyncStatus.pending.rawValue
+                }
+                // Push reordered tasks to Supabase
+                let tasksToSync = reordered
+                _Concurrency.Task {
+                    for task in tasksToSync {
+                        await syncEngine?.pushTask(task)
+                    }
                 }
             }
         }

@@ -6,6 +6,7 @@ import Supabase
 
 struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @Query private var stores: [GroceryStore]
     
     var authManager: AuthManager
@@ -104,7 +105,7 @@ struct ProfileView: View {
         .confirmationDialog("Sign out?", isPresented: $showSignOutConfirm, titleVisibility: .visible) {
             Button("Sign Out", role: .destructive) {
                 _Concurrency.Task {
-                    await authManager.signOut()
+                    await authManager.signOut(modelContext: modelContext)
                     dismiss()
                 }
             }

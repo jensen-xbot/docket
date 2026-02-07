@@ -77,6 +77,7 @@
 		8E9C0F1B2A3B4C5D6E7F0224 /* IngredientLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IngredientLibrary.swift; sourceTree = "<group>"; };
 		8E9C0F1B2A3B4C5D6E7F0225 /* StoreStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreStore.swift; sourceTree = "<group>"; };
 		8E9C0F1B2A3B4C5D6E7F0226 /* StorePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorePickerView.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F0227 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AD6606E72F36F4F0004CEBFE /* Docket.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Docket.entitlements; sourceTree = "<group>"; };
 		AD6606E82F37934E004CEBFE /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -115,6 +116,7 @@
 			children = (
 				AD6606E82F37934E004CEBFE /* AppIcon.icon */,
 				AD6606E72F36F4F0004CEBFE /* Docket.entitlements */,
+				8E9C0F1B2A3B4C5D6E7F0227 /* Info.plist */,
 				8E9C0F1B2A3B4C5D6E7F0201 /* DocketApp.swift */,
 				8E9C0F1B2A3B4C5D6E7F0006 /* Models */,
 				8E9C0F1B2A3B4C5D6E7F000A /* Managers */,
@@ -435,8 +437,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = Docket;
-				INFOPLIST_KEY_NSContactsUsageDescription = "Docket uses your contacts to quickly share tasks with friends and family.";
+				INFOPLIST_FILE = Docket/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -461,8 +462,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = Docket;
-				INFOPLIST_KEY_NSContactsUsageDescription = "Docket uses your contacts to quickly share tasks with friends and family.";
+				INFOPLIST_FILE = Docket/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

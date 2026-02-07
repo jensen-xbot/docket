@@ -2,6 +2,7 @@ import Foundation
 import Supabase
 import AuthenticationServices
 import SwiftUI
+import SwiftData
 
 @MainActor
 @Observable
@@ -102,8 +103,11 @@ class AuthManager {
         }
     }
     
-    func signOut() async {
+    func signOut(modelContext: ModelContext) async {
         do {
+            // Clear all local data before signing out
+            clearLocalData(modelContext: modelContext)
+            
             try await supabase.auth.signOut()
             self.isAuthenticated = false
         } catch {
@@ -111,14 +115,30 @@ class AuthManager {
         }
     }
     
-    func handleAuthCallback(url: URL) {
-        _Concurrency.Task {
-            do {
-                try await supabase.auth.session(from: url)
-            } catch {
-                print("Auth callback error: \(error)")
-            }
+    /// Wipes all local SwiftData records and UserDefaults to prevent data leaking between accounts
+    private func clearLocalData(modelContext: ModelContext) {
+        // Delete all SwiftData records
+        do {
+            try modelContext.delete(model: Task.self)
+            try modelContext.delete(model: GroceryStore.self)
+            try modelContext.delete(model: IngredientLibrary.self)
+            try modelContext.save()
+        } catch {
+            print("Error clearing local data: \(error)")
         }
+        
+        // Clear UserDefaults for app-specific keys
+        UserDefaults.standard.removeObject(forKey: "savedStores")
+        UserDefaults.standard.removeObject(forKey: "savedCategories")
+        UserDefaults.standard.removeObject(forKey: "notifications.remindersEnabled")
+        UserDefaults.standard.removeObject(forKey: "notifications.shareAlertsEnabled")
+        UserDefaults.standard.removeObject(forKey: "notifications.defaultReminderMinutes")
+    }
+    
+    func handleAuthCallback(url: URL) {
+        // Use handle() method for SwiftUI - this processes the auth callback URL
+        // The auth state changes will be picked up by observeAuthChanges()
+        supabase.auth.handle(url)
     }
     
     func currentUserId() async -> String? {
