@@ -190,6 +190,8 @@ struct ChecklistItem: Codable, Identifiable {
     var name: String
     var isChecked: Bool
     var sortOrder: Int
+    var quantity: Int = 1
+    var isStarred: Bool = false
 }
 
 enum Priority: Int, CaseIterable, Codable {

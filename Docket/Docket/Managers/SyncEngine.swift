@@ -189,10 +189,188 @@ class SyncEngine {
         }
     }
     
+    // Pull remote grocery stores and merge with local
+    func pullGroceryStores() async {
+        do {
+            let session = try await supabase.auth.session
+            let userId = session.user.id.uuidString
+            
+            let remoteStores: [GroceryStoreDTO] = try await supabase
+                .from("grocery_stores")
+                .select()
+                .eq("user_id", value: userId)
+                .order("updated_at", ascending: false)
+                .execute()
+                .value
+            
+            let descriptor = FetchDescriptor<GroceryStore>()
+            let localStores = try? modelContext.fetch(descriptor)
+            
+            for dto in remoteStores {
+                if let existing = localStores?.first(where: { $0.id == dto.id }) {
+                    if dto.updatedAt > existing.updatedAt {
+                        existing.userId = userId
+                        existing.name = dto.name
+                        existing.items = dto.items
+                        existing.updatedAt = dto.updatedAt
+                        existing.syncStatus = SyncStatus.synced.rawValue
+                    }
+                } else {
+                    let store = dto.toGroceryStore()
+                    modelContext.insert(store)
+                }
+            }
+            
+            try? modelContext.save()
+        } catch {
+            print("Grocery pull error: \(error)")
+        }
+    }
+    
+    // Push a single grocery store to Supabase
+    func pushGroceryStore(_ store: GroceryStore) async {
+        do {
+            let session = try await supabase.auth.session
+            let userId = session.user.id.uuidString
+            
+            store.userId = userId
+            store.updatedAt = Date()
+            let dto = GroceryStoreDTO(from: store, userId: userId)
+            
+            try await supabase
+                .from("grocery_stores")
+                .upsert(dto, onConflict: "id")
+                .execute()
+            
+            store.syncStatus = SyncStatus.synced.rawValue
+            try? modelContext.save()
+        } catch {
+            store.syncStatus = SyncStatus.failed.rawValue
+            try? modelContext.save()
+            print("Grocery push error: \(error)")
+        }
+    }
+    
+    // Push all pending grocery stores
+    func pushPendingGroceryStores() async {
+        let syncedValue = 0
+        let descriptor = FetchDescriptor<GroceryStore>(
+            predicate: #Predicate<GroceryStore> { store in
+                store.syncStatus != syncedValue
+            }
+        )
+        
+        let pendingStores = (try? modelContext.fetch(descriptor)) ?? []
+        
+        for store in pendingStores {
+            await pushGroceryStore(store)
+        }
+    }
+    
+    // Delete grocery store from Supabase (call BEFORE deleting from SwiftData)
+    func deleteRemoteGroceryStore(id: UUID, syncStatus: Int) async {
+        if syncStatus == SyncStatus.pending.rawValue {
+            return
+        }
+        
+        do {
+            try await supabase
+                .from("grocery_stores")
+                .delete()
+                .eq("id", value: id.uuidString)
+                .execute()
+        } catch {
+            print("Remote grocery delete error: \(error)")
+        }
+    }
+    
+    // Pull remote ingredients and merge with local
+    func pullIngredients() async {
+        do {
+            let session = try await supabase.auth.session
+            let userId = session.user.id.uuidString
+            
+            let remoteIngredients: [IngredientLibraryDTO] = try await supabase
+                .from("ingredients")
+                .select()
+                .eq("user_id", value: userId)
+                .order("updated_at", ascending: false)
+                .execute()
+                .value
+            
+            let descriptor = FetchDescriptor<IngredientLibrary>()
+            let localIngredients = try? modelContext.fetch(descriptor)
+            
+            for dto in remoteIngredients {
+                if let existing = localIngredients?.first(where: { $0.id == dto.id }) {
+                    if dto.updatedAt > existing.updatedAt {
+                        existing.userId = userId
+                        existing.name = dto.name
+                        existing.displayName = dto.displayName
+                        existing.useCount = dto.useCount
+                        existing.updatedAt = dto.updatedAt
+                        existing.syncStatus = SyncStatus.synced.rawValue
+                    }
+                } else {
+                    let ingredient = dto.toIngredientLibrary()
+                    modelContext.insert(ingredient)
+                }
+            }
+            
+            try? modelContext.save()
+        } catch {
+            print("Ingredient pull error: \(error)")
+        }
+    }
+    
+    // Push a single ingredient to Supabase
+    func pushIngredient(_ ingredient: IngredientLibrary) async {
+        do {
+            let session = try await supabase.auth.session
+            let userId = session.user.id.uuidString
+            
+            ingredient.userId = userId
+            ingredient.updatedAt = Date()
+            let dto = IngredientLibraryDTO(from: ingredient, userId: userId)
+            
+            try await supabase
+                .from("ingredients")
+                .upsert(dto, onConflict: "id")
+                .execute()
+            
+            ingredient.syncStatus = SyncStatus.synced.rawValue
+            try? modelContext.save()
+        } catch {
+            ingredient.syncStatus = SyncStatus.failed.rawValue
+            try? modelContext.save()
+            print("Ingredient push error: \(error)")
+        }
+    }
+    
+    // Push all pending ingredients
+    func pushPendingIngredients() async {
+        let syncedValue = 0
+        let descriptor = FetchDescriptor<IngredientLibrary>(
+            predicate: #Predicate<IngredientLibrary> { ingredient in
+                ingredient.syncStatus != syncedValue
+            }
+        )
+        
+        let pendingIngredients = (try? modelContext.fetch(descriptor)) ?? []
+        
+        for ingredient in pendingIngredients {
+            await pushIngredient(ingredient)
+        }
+    }
+    
     // Full sync: pull then push
     func syncAll() async {
         await pullTasks()
         await pushPendingTasks()
+        await pullGroceryStores()
+        await pushPendingGroceryStores()
+        await pullIngredients()
+        await pushPendingIngredients()
         await subscribeToSharedTasks()
     }
     

@@ -22,11 +22,11 @@ struct DocketApp: App {
                 await NotificationManager.shared.requestAuthorization()
             }
         }
-        .modelContainer(for: [Task.self, GroceryStore.self])
+        .modelContainer(for: [Task.self, GroceryStore.self, IngredientLibrary.self])
     }
 }
 
 #Preview {
     TaskListView()
-        .modelContainer(for: [Task.self, GroceryStore.self], inMemory: true)
+        .modelContainer(for: [Task.self, GroceryStore.self, IngredientLibrary.self], inMemory: true)
 }

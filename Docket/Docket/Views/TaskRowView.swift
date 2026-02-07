@@ -75,7 +75,7 @@ struct TaskRowView: View {
             if let onShare = onShare {
                 Button(action: onShare) {
                     Image(systemName: "square.and.arrow.up")
-                        .font(.caption)
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -83,7 +83,7 @@ struct TaskRowView: View {
             
             Button(action: togglePinned) {
                 Image(systemName: task.isPinned ? "pin.fill" : "pin")
-                    .font(.caption)
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(task.isPinned ? .orange : .secondary)
             }
             .buttonStyle(.plain)

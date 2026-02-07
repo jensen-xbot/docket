@@ -19,16 +19,16 @@ struct AddTaskView: View {
     @State private var selectedStore: String = ""
     @State private var showStorePicker: Bool = false
     @State private var loadedTemplateName: String? = nil
+    @State private var syncEngine: SyncEngine? = nil
     
     // Save template prompt
     @State private var showSaveTemplate = false
     @State private var templateName: String = ""
-    @State private var pendingTask: Task? = nil
     
     @FocusState private var titleFocused: Bool
     @FocusState private var notesFocused: Bool
     
-    private let defaultStores = ["Costco", "Metro", "IGA", "Loblaws", "Maxi"]
+    @State private var storeStore = StoreStore()
     
     private var isValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -47,7 +47,7 @@ struct AddTaskView: View {
                     CategoryPickerView(selectedCategory: $category)
                         .onChange(of: category) {
                             updateTitleForCategory()
-                            if isGroceryCategory {
+                            if isChecklistCategory {
                                 showStorePicker = true
                             } else {
                                 showStorePicker = false
@@ -55,33 +55,12 @@ struct AddTaskView: View {
                             }
                         }
                     
-                    // Store picker (appears when Groceries is selected)
-                    if showStorePicker || isGroceryCategory {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Store")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            FlowLayout(spacing: 8) {
-                                ForEach(defaultStores, id: \.self) { store in
-                                    Button {
-                                        if selectedStore == store {
-                                            selectedStore = ""
-                                        } else {
-                                            selectedStore = store
-                                        }
-                                        updateGroceryTitle()
-                                    } label: {
-                                        Text(store)
-                                            .font(.subheadline)
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 6)
-                                            .background(selectedStore == store ? Color.orange : Color(.systemGray6))
-                                            .foregroundStyle(selectedStore == store ? .white : .primary)
-                                            .cornerRadius(16)
-                                    }
-                                }
-                            }
-                        }
+                    // Store picker (appears when Groceries or Shopping is selected)
+                    if showStorePicker || isChecklistCategory {
+                        StorePickerView(
+                            selectedStore: $selectedStore,
+                            onStoreChanged: { updateGroceryTitle() }
+                        )
                         
                         // Saved templates to load
                         if !availableTemplates.isEmpty {
@@ -130,7 +109,10 @@ struct AddTaskView: View {
                     Divider()
                     
                     if isChecklistCategory {
-                        ChecklistEditorView(items: $checklistItems)
+                        ChecklistEditorView(
+                            items: $checklistItems,
+                            onSaveTemplate: { promptSaveTemplate() }
+                        )
                         Divider()
                     }
                     
@@ -203,11 +185,7 @@ struct AddTaskView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 200)
             }
-            .onTapGesture {
-                titleFocused = false
-                notesFocused = false
-            }
-            .scrollDismissesKeyboard(.interactively)
+            .scrollDismissesKeyboard(.immediately)
             .navigationTitle("New Task")
             .toolbarTitleDisplayMode(.inline)
             .toolbar {
@@ -219,19 +197,26 @@ struct AddTaskView: View {
                         .disabled(!isValid)
                         .fontWeight(.semibold)
                 }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }
+                }
             }
-            .onAppear { titleFocused = true }
+            .onAppear {
+                titleFocused = true
+                if syncEngine == nil {
+                    syncEngine = SyncEngine(modelContext: modelContext)
+                }
+            }
             .alert("Save as Template?", isPresented: $showSaveTemplate) {
                 TextField("Template name", text: $templateName)
                 Button("Save") {
                     saveTemplate()
-                    finalizeSave()
-                }
-                Button("Skip") {
-                    finalizeSave()
                 }
                 Button("Cancel", role: .cancel) {
-                    pendingTask = nil
+                    templateName = ""
                 }
             } message: {
                 Text("Save these \(checklistItems.count) items as a grocery template for next time?")
@@ -244,9 +229,9 @@ struct AddTaskView: View {
             ChecklistItem(id: UUID(), name: name, isChecked: false, sortOrder: index)
         }
         loadedTemplateName = template.name
-        // Also set store if it matches a default store
-        if defaultStores.contains(where: { $0.lowercased() == template.name.lowercased() }) {
-            selectedStore = defaultStores.first(where: { $0.lowercased() == template.name.lowercased() }) ?? ""
+        // Also set store if it matches a saved store
+        if let match = storeStore.match(template.name) {
+            selectedStore = match
             updateGroceryTitle()
         }
     }
@@ -271,27 +256,15 @@ struct AddTaskView: View {
             syncStatus: .pending
         )
         
-        // Offer to save template if items changed
-        if isChecklistCategory && !checklistItems.isEmpty && itemsDifferFromTemplate() {
-            pendingTask = task
-            templateName = selectedStore.isEmpty ? "My List" : selectedStore
-            showSaveTemplate = true
-        } else {
-            modelContext.insert(task)
-            _Concurrency.Task {
-                await NotificationManager.shared.scheduleNotification(for: task)
-            }
-            dismiss()
+        if isChecklistCategory && !checklistItems.isEmpty {
+            autoSaveTemplateIfNeeded()
         }
-    }
-    
-    private func finalizeSave() {
-        guard let task = pendingTask else { return }
+        
         modelContext.insert(task)
         _Concurrency.Task {
             await NotificationManager.shared.scheduleNotification(for: task)
+            await syncEngine?.pushTask(task)
         }
-        pendingTask = nil
         dismiss()
     }
     
@@ -299,21 +272,39 @@ struct AddTaskView: View {
         let name = templateName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
         let itemNames = checklistItems.sorted { $0.sortOrder < $1.sortOrder }.map { $0.name }
+        let store: GroceryStore
         if let existing = groceryTemplates.first(where: { $0.name.lowercased() == name.lowercased() }) {
             existing.items = itemNames
             existing.updatedAt = Date()
+            existing.syncStatus = SyncStatus.pending.rawValue
+            store = existing
         } else {
-            let store = GroceryStore(name: name, items: itemNames)
-            modelContext.insert(store)
+            let created = GroceryStore(name: name, items: itemNames, syncStatus: .pending)
+            modelContext.insert(created)
+            store = created
+        }
+        _Concurrency.Task {
+            await syncEngine?.pushGroceryStore(store)
         }
     }
     
-    private func itemsDifferFromTemplate() -> Bool {
-        let currentNames = checklistItems.sorted { $0.sortOrder < $1.sortOrder }.map { $0.name }
-        for template in groceryTemplates {
-            if template.items == currentNames { return false }
+    private func autoSaveTemplateIfNeeded() {
+        let name = loadedTemplateName ?? (selectedStore.isEmpty ? nil : selectedStore)
+        guard let templateName = name else { return }
+        let itemNames = checklistItems.sorted { $0.sortOrder < $1.sortOrder }.map { $0.name }
+        if let existing = groceryTemplates.first(where: { $0.name.lowercased() == templateName.lowercased() }) {
+            existing.items = itemNames
+            existing.updatedAt = Date()
+            existing.syncStatus = SyncStatus.pending.rawValue
+            _Concurrency.Task {
+                await syncEngine?.pushGroceryStore(existing)
+            }
         }
-        return true
+    }
+    
+    private func promptSaveTemplate() {
+        templateName = selectedStore.isEmpty ? "My List" : selectedStore
+        showSaveTemplate = true
     }
     
     private func updateTitleForCategory() {

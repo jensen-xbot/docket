@@ -22,16 +22,16 @@ struct EditTaskView: View {
     @State private var showDeleteConfirm = false
     @State private var isEditingCategory = false
     @State private var loadedTemplateName: String? = nil
+    @State private var syncEngine: SyncEngine? = nil
     
     // Save template prompt
     @State private var showSaveTemplate = false
     @State private var templateName: String = ""
-    @State private var pendingSave = false
     
     @FocusState private var titleFocused: Bool
     @FocusState private var notesFocused: Bool
     
-    private let defaultStores = ["Costco", "Metro", "IGA", "Loblaws", "Maxi"]
+    @State private var storeStore = StoreStore()
     
     private var isValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -45,39 +45,55 @@ struct EditTaskView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    // Category & Store — collapsed or expanded
+                    // Category & Store
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isEditingCategory.toggle()
+                        }
+                    } label: {
+                        HStack {
+                            if !category.isEmpty {
+                                Label {
+                                    HStack(spacing: 4) {
+                                        Text(category)
+                                        if !selectedStore.isEmpty {
+                                            Text("·")
+                                                .foregroundStyle(.secondary)
+                                            Text(selectedStore)
+                                        }
+                                    }
+                                } icon: {
+                                    Image(systemName: "tag.fill")
+                                        .foregroundStyle(.green)
+                                }
+                                .font(.subheadline)
+                            } else {
+                                Text("No category")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Image(systemName: isEditingCategory ? "chevron.up" : "chevron.down")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
+                    
                     if isEditingCategory {
                         CategoryPickerView(selectedCategory: $category)
                             .onChange(of: category) {
                                 updateTitleForCategory()
                             }
                         
-                        if isGroceryCategory {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Store")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                FlowLayout(spacing: 8) {
-                                    ForEach(defaultStores, id: \.self) { store in
-                                        Button {
-                                            if selectedStore == store {
-                                                selectedStore = ""
-                                            } else {
-                                                selectedStore = store
-                                            }
-                                            updateGroceryTitle()
-                                        } label: {
-                                            Text(store)
-                                                .font(.subheadline)
-                                                .padding(.horizontal, 12)
-                                                .padding(.vertical, 6)
-                                                .background(selectedStore == store ? Color.orange : Color(.systemGray6))
-                                                .foregroundStyle(selectedStore == store ? .white : .primary)
-                                                .cornerRadius(16)
-                                        }
-                                    }
-                                }
-                            }
+                        if isChecklistCategory {
+                            StorePickerView(
+                                selectedStore: $selectedStore,
+                                onStoreChanged: { updateGroceryTitle() }
+                            )
                             
                             // Saved templates
                             if !availableTemplates.isEmpty {
@@ -122,51 +138,16 @@ struct EditTaskView: View {
                                 }
                             }
                         }
-                        
-                        Button("Done") {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                isEditingCategory = false
-                            }
-                        }
-                        .font(.subheadline)
-                    } else {
-                        HStack {
-                            if !category.isEmpty {
-                                Label {
-                                    HStack(spacing: 4) {
-                                        Text(category)
-                                        if !selectedStore.isEmpty {
-                                            Text("·")
-                                                .foregroundStyle(.secondary)
-                                            Text(selectedStore)
-                                        }
-                                    }
-                                } icon: {
-                                    Image(systemName: "tag.fill")
-                                        .foregroundStyle(.green)
-                                }
-                                .font(.subheadline)
-                            } else {
-                                Text("No category")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-                            
-                            Spacer()
-                            
-                            Button("Edit") {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    isEditingCategory = true
-                                }
-                            }
-                            .font(.subheadline)
-                        }
                     }
                     
                     Divider()
                     
                     if isChecklistCategory || !checklistItems.isEmpty {
-                        ChecklistEditorView(items: $checklistItems)
+                        ChecklistEditorView(
+                            items: $checklistItems,
+                            onSaveTemplate: { promptSaveTemplate() },
+                            autoFocusAdd: false
+                        )
                         Divider()
                     }
                     
@@ -260,11 +241,7 @@ struct EditTaskView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 200)
             }
-            .onTapGesture {
-                titleFocused = false
-                notesFocused = false
-            }
-            .scrollDismissesKeyboard(.interactively)
+            .scrollDismissesKeyboard(.immediately)
             .navigationTitle("Edit Task")
             .toolbarTitleDisplayMode(.inline)
             .toolbar {
@@ -276,6 +253,12 @@ struct EditTaskView: View {
                         .disabled(!isValid)
                         .fontWeight(.semibold)
                 }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }
+                }
             }
             .confirmationDialog("Delete this task?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
                 Button("Delete", role: .destructive) { deleteTask() }
@@ -285,18 +268,17 @@ struct EditTaskView: View {
                 TextField("Template name", text: $templateName)
                 Button("Save") {
                     saveTemplate()
-                    finalizeUpdate()
-                }
-                Button("Skip") {
-                    finalizeUpdate()
                 }
                 Button("Cancel", role: .cancel) {
-                    pendingSave = false
+                    templateName = ""
                 }
             } message: {
                 Text("Save these \(checklistItems.count) items as a grocery template for next time?")
             }
             .onAppear {
+                if syncEngine == nil {
+                    syncEngine = SyncEngine(modelContext: modelContext)
+                }
                 title = task.title
                 priority = task.priority
                 hasDueDate = task.dueDate != nil
@@ -312,14 +294,10 @@ struct EditTaskView: View {
     }
     
     private func updateTask() {
-        // Check if we should offer to save template
-        if isChecklistCategory && !checklistItems.isEmpty && itemsDifferFromTemplate() {
-            pendingSave = true
-            templateName = selectedStore.isEmpty ? "My List" : selectedStore
-            showSaveTemplate = true
-        } else {
-            finalizeUpdate()
+        if isChecklistCategory && !checklistItems.isEmpty {
+            autoSaveTemplateIfNeeded()
         }
+        finalizeUpdate()
     }
     
     private func finalizeUpdate() {
@@ -335,8 +313,8 @@ struct EditTaskView: View {
         task.syncStatus = SyncStatus.pending.rawValue
         _Concurrency.Task {
             await NotificationManager.shared.scheduleNotification(for: task)
+            await syncEngine?.pushTask(task)
         }
-        pendingSave = false
         dismiss()
     }
     
@@ -354,12 +332,19 @@ struct EditTaskView: View {
         
         let itemNames = checklistItems.sorted { $0.sortOrder < $1.sortOrder }.map { $0.name }
         
+        let store: GroceryStore
         if let existing = groceryTemplates.first(where: { $0.name.lowercased() == name.lowercased() }) {
             existing.items = itemNames
             existing.updatedAt = Date()
+            existing.syncStatus = SyncStatus.pending.rawValue
+            store = existing
         } else {
-            let store = GroceryStore(name: name, items: itemNames)
-            modelContext.insert(store)
+            let created = GroceryStore(name: name, items: itemNames, syncStatus: .pending)
+            modelContext.insert(created)
+            store = created
+        }
+        _Concurrency.Task {
+            await syncEngine?.pushGroceryStore(store)
         }
     }
     
@@ -372,20 +357,29 @@ struct EditTaskView: View {
             ChecklistItem(id: UUID(), name: name, isChecked: false, sortOrder: index)
         }
         loadedTemplateName = template.name
-        if defaultStores.contains(where: { $0.lowercased() == template.name.lowercased() }) {
-            selectedStore = defaultStores.first(where: { $0.lowercased() == template.name.lowercased() }) ?? ""
+        if let match = storeStore.match(template.name) {
+            selectedStore = match
             updateGroceryTitle()
         }
     }
     
-    private func itemsDifferFromTemplate() -> Bool {
-        let currentNames = checklistItems.sorted { $0.sortOrder < $1.sortOrder }.map { $0.name }
-        for template in groceryTemplates {
-            if template.items == currentNames {
-                return false
+    private func autoSaveTemplateIfNeeded() {
+        let name = loadedTemplateName ?? (selectedStore.isEmpty ? nil : selectedStore)
+        guard let templateName = name else { return }
+        let itemNames = checklistItems.sorted { $0.sortOrder < $1.sortOrder }.map { $0.name }
+        if let existing = groceryTemplates.first(where: { $0.name.lowercased() == templateName.lowercased() }) {
+            existing.items = itemNames
+            existing.updatedAt = Date()
+            existing.syncStatus = SyncStatus.pending.rawValue
+            _Concurrency.Task {
+                await syncEngine?.pushGroceryStore(existing)
             }
         }
-        return true
+    }
+    
+    private func promptSaveTemplate() {
+        templateName = selectedStore.isEmpty ? "My List" : selectedStore
+        showSaveTemplate = true
     }
     
     private func updateTitleForCategory() {
@@ -418,8 +412,8 @@ struct EditTaskView: View {
             let parts = currentTitle.components(separatedBy: " - ")
             if parts.count >= 2 {
                 let storePart = parts.dropFirst().joined(separator: " - ").trimmingCharacters(in: .whitespacesAndNewlines)
-                if defaultStores.contains(where: { $0.lowercased() == storePart.lowercased() }) {
-                    selectedStore = defaultStores.first(where: { $0.lowercased() == storePart.lowercased() }) ?? ""
+                if let match = storeStore.match(storePart) {
+                    selectedStore = match
                 }
             }
         }
