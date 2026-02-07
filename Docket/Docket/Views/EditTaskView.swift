@@ -13,6 +13,7 @@ struct EditTaskView: View {
     @State private var dueDate: Date = Date()
     @State private var category: String = ""
     @State private var notes: String = ""
+    @State private var showDeleteConfirm = false
     
     @FocusState private var titleFocused: Bool
     
@@ -26,41 +27,96 @@ struct EditTaskView: View {
     
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Task") {
-                    TextField("Task title", text: $title, axis: .vertical)
-                        .focused($titleFocused)
-                }
-                
-                Section {
-                    Toggle("Completed", isOn: $task.isCompleted)
-                }
-                
-                Section("Details") {
-                    Picker("Priority", selection: $priority) {
-                        ForEach(Priority.allCases, id: \.self) { p in
-                            Label(p.displayName, systemImage: p.icon).tag(p)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Title
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Title")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        TextField("Task title", text: $title, axis: .vertical)
+                            .font(.title3)
+                            .focused($titleFocused)
+                    }
+                    
+                    Divider()
+                    
+                    // Completed toggle
+                    Toggle(isOn: $task.isCompleted) {
+                        Label("Completed", systemImage: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                    }
+                    
+                    Divider()
+                    
+                    // Priority
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Priority")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Picker("Priority", selection: $priority) {
+                            ForEach(Priority.allCases, id: \.self) { p in
+                                Text(p.displayName).tag(p)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                    
+                    Divider()
+                    
+                    // Due Date
+                    VStack(alignment: .leading, spacing: 8) {
+                        Toggle(isOn: $hasDueDate.animation(.easeInOut(duration: 0.2))) {
+                            Label("Due Date", systemImage: "calendar")
+                                .font(.subheadline)
+                        }
+                        if hasDueDate {
+                            DatePicker("", selection: $dueDate, displayedComponents: [.date])
+                                .datePickerStyle(.graphical)
+                                .transition(.opacity.combined(with: .move(edge: .top)))
                         }
                     }
-                    Toggle("Set due date", isOn: $hasDueDate)
-                    if hasDueDate {
-                        DatePicker("Due date", selection: $dueDate, displayedComponents: [.date])
+                    
+                    Divider()
+                    
+                    // Category
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Category")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        TextField("e.g. Work, Personal, Family", text: $category)
                     }
-                }
-                
-                Section("Additional Info") {
-                    TextField("Category (optional)", text: $category)
-                    TextField("Notes (optional)", text: $notes, axis: .vertical)
-                        .lineLimit(3...6)
-                }
-                
-                Section {
-                    Button(role: .destructive) { deleteTask() } label: {
-                        HStack { Spacer(); Text("Delete Task"); Spacer() }
+                    
+                    Divider()
+                    
+                    // Notes
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Notes")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        TextField("Add any extra details...", text: $notes, axis: .vertical)
+                            .lineLimit(3...8)
                     }
+                    
+                    Divider()
+                    
+                    // Delete
+                    Button(role: .destructive) {
+                        showDeleteConfirm = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "trash")
+                            Text("Delete Task")
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .padding(.top, 8)
                 }
+                .padding(.horizontal)
+                .padding(.top, 8)
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Edit Task")
+            .toolbarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -70,6 +126,10 @@ struct EditTaskView: View {
                         .disabled(!isValid)
                         .fontWeight(.semibold)
                 }
+            }
+            .confirmationDialog("Delete this task?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+                Button("Delete", role: .destructive) { deleteTask() }
+                Button("Cancel", role: .cancel) { }
             }
             .onAppear {
                 title = task.title
@@ -89,6 +149,7 @@ struct EditTaskView: View {
         task.dueDate = hasDueDate ? dueDate : nil
         task.category = category.isEmpty ? nil : category
         task.notes = notes.isEmpty ? nil : notes
+        task.completedAt = task.isCompleted ? (task.completedAt ?? Date()) : nil
         dismiss()
     }
     

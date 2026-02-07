@@ -6,6 +6,7 @@ struct DocketApp: App {
     var body: some Scene {
         WindowGroup {
             TaskListView()
+                .tint(.blue)
         }
         .modelContainer(for: Task.self)
     }

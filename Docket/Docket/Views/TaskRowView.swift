@@ -10,7 +10,7 @@ struct TaskRowView: View {
             Button(action: toggleCompleted) {
                 Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 22))
-                    .foregroundStyle(task.isCompleted ? .green : .priorityColor(task.priority))
+                    .foregroundStyle(task.isCompleted ? .green : Color.priorityColor(task.priority))
                     .contentTransition(.symbolEffect(.replace))
             }
             .buttonStyle(.plain)
@@ -27,16 +27,16 @@ struct TaskRowView: View {
                 HStack(spacing: 6) {
                     Image(systemName: task.priority.icon)
                         .font(.caption2)
-                        .foregroundStyle(.priorityColor(task.priority))
+                        .foregroundStyle(Color.priorityColor(task.priority))
                     
                     if let dueDate = task.dueDate {
                         HStack(spacing: 2) {
                             Image(systemName: "calendar")
                                 .font(.caption2)
-                            Text(task.dueDateDisplay)
+                            Text(dueDate.formattedDueDate)
                                 .font(.caption)
                         }
-                        .foregroundStyle(.dueDateColor(for: task))
+                        .foregroundStyle(Color.dueDateColor(for: task))
                     }
                     
                     if let category = task.category, !category.isEmpty {

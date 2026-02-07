@@ -50,12 +50,24 @@ struct TaskListView: View {
     private var filteredTasks: [Task] {
         viewModel.filteredTasks(from: allTasks)
     }
+
+    private var hasActiveFilters: Bool {
+        viewModel.selectedFilter != .all ||
+        viewModel.selectedPriority != nil ||
+        !viewModel.searchText.isEmpty
+    }
     
     var body: some View {
         NavigationStack {
-            ZStack {
+            Group {
                 if allTasks.isEmpty {
                     EmptyListView()
+                } else if filteredTasks.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Matching Tasks", systemImage: "line.3.horizontal.decrease.circle")
+                    } description: {
+                        Text("Try adjusting your filters or search.")
+                    }
                 } else {
                     taskList
                 }
@@ -63,37 +75,65 @@ struct TaskListView: View {
             .navigationTitle("Docket")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Menu {
-                        ForEach(TaskFilter.allCases, id: \.self) { filter in
-                            Button(filter.rawValue) {
-                                withAnimation { viewModel.selectedFilter = filter }
-                            }
-                        }
-                        Divider()
-                        Menu("Priority") {
-                            Button("All") { viewModel.selectedPriority = nil }
-                            ForEach(Priority.allCases, id: \.self) { p in
-                                Button(p.displayName) { viewModel.selectedPriority = p }
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(viewModel.selectedFilter.rawValue)
-                            Image(systemName: "chevron.down").font(.caption)
-                        }
-                    }
+                    filterMenu
                 }
-                
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: { showingAddTask = true }) {
-                        Image(systemName: "plus.circle.fill").font(.title3)
+                        Image(systemName: "plus")
+                            .fontWeight(.semibold)
                     }
                 }
             }
-            .sheet(isPresented: $showingAddTask) { AddTaskView() }
-            .sheet(item: $taskToEdit) { task in EditTaskView(task: task) }
+            .fullScreenCover(isPresented: $showingAddTask) {
+                AddTaskView()
+            }
+            .fullScreenCover(item: $taskToEdit) { task in
+                EditTaskView(task: task)
+            }
         }
         .searchable(text: $viewModel.searchText, prompt: "Search tasks")
+    }
+    
+    private var filterMenu: some View {
+        Menu {
+            Picker("Filter", selection: $viewModel.selectedFilter) {
+                ForEach(TaskFilter.allCases, id: \.self) { filter in
+                    Text(filter.rawValue).tag(filter)
+                }
+            }
+            Divider()
+            Menu("Priority") {
+                Button {
+                    viewModel.selectedPriority = nil
+                } label: {
+                    if viewModel.selectedPriority == nil {
+                        Label("All", systemImage: "checkmark")
+                    } else {
+                        Text("All")
+                    }
+                }
+                ForEach(Priority.allCases, id: \.self) { p in
+                    Button {
+                        viewModel.selectedPriority = p
+                    } label: {
+                        if viewModel.selectedPriority == p {
+                            Label(p.displayName, systemImage: "checkmark")
+                        } else {
+                            Text(p.displayName)
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "line.3.horizontal.decrease")
+                if hasActiveFilters {
+                    Circle()
+                        .fill(.tint)
+                        .frame(width: 6, height: 6)
+                }
+            }
+        }
     }
     
     private var taskList: some View {

@@ -5,7 +5,7 @@ struct EmptyListView: View {
         ContentUnavailableView {
             Label("No Tasks Yet", systemImage: "checklist")
         } description: {
-            Text("Tap + to create your first task")
+            Text("Tap  +  to add your first task.")
         }
     }
 }

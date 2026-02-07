@@ -98,6 +98,27 @@ USER WORKFLOW:
 2. ⚠️ Cron wake delays - need "now" mode for immediate checks
 3. ⚠️ Xcode project structure - need .xcodeproj generation
 
+### Critical Xcode Project Lesson (2026-02-06)
+
+**Problem:** App rendered in a tiny "card" with black bars, looking like an iPhone 4 app on modern devices.
+
+**Root cause:** The `.xcodeproj` was missing `INFOPLIST_KEY_UILaunchScreen_Generation = YES` in the target build settings. Without this key, iOS assumes the app was built for legacy screen sizes and runs it in a letterboxed compatibility mode.
+
+**Fix:** Add these keys to **both Debug and Release** target build configurations:
+
+```
+INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+INFOPLIST_KEY_CFBundleDisplayName = <AppName>;
+INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+```
+
+Also ensure `Assets.xcassets` contains an `AppIcon.appiconset/Contents.json` (even if empty) when `ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon` is set.
+
+**How to verify:** After adding, delete the app from the simulator/device, Clean Build Folder (Shift+Cmd+K), and run again. The app should fill the full screen edge-to-edge.
+
+**Rule for future projects:** When generating an `.xcodeproj` by hand (not through Xcode's "New Project" wizard), always include `UILaunchScreen_Generation = YES`. Xcode sets this automatically when you create a project through the GUI, but it's easy to miss when building the project file programmatically.
+
 ### Framework Updates Made
 1. Updated PROJECT-MONITOR-TEMPLATE.md to v1.2 (fast-exit)
 2. Established MODULE-LOG.md status convention

@@ -20,31 +20,75 @@ struct AddTaskView: View {
     
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Task") {
-                    TextField("What needs to be done?", text: $title, axis: .vertical)
-                        .focused($titleFocused)
-                }
-                
-                Section("Details") {
-                    Picker("Priority", selection: $priority) {
-                        ForEach(Priority.allCases, id: \.self) { p in
-                            Label(p.displayName, systemImage: p.icon).tag(p)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Title
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Title")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        TextField("What needs to be done?", text: $title, axis: .vertical)
+                            .font(.title3)
+                            .focused($titleFocused)
+                    }
+                    
+                    Divider()
+                    
+                    // Priority
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Priority")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Picker("Priority", selection: $priority) {
+                            ForEach(Priority.allCases, id: \.self) { p in
+                                Text(p.displayName).tag(p)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                    
+                    Divider()
+                    
+                    // Due Date
+                    VStack(alignment: .leading, spacing: 8) {
+                        Toggle(isOn: $hasDueDate.animation(.easeInOut(duration: 0.2))) {
+                            Label("Due Date", systemImage: "calendar")
+                                .font(.subheadline)
+                        }
+                        if hasDueDate {
+                            DatePicker("", selection: $dueDate, displayedComponents: [.date])
+                                .datePickerStyle(.graphical)
+                                .transition(.opacity.combined(with: .move(edge: .top)))
                         }
                     }
-                    Toggle("Set due date", isOn: $hasDueDate)
-                    if hasDueDate {
-                        DatePicker("Due date", selection: $dueDate, displayedComponents: [.date])
+                    
+                    Divider()
+                    
+                    // Category
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Category")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        TextField("e.g. Work, Personal, Family", text: $category)
+                    }
+                    
+                    Divider()
+                    
+                    // Notes
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Notes")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        TextField("Add any extra details...", text: $notes, axis: .vertical)
+                            .lineLimit(3...8)
                     }
                 }
-                
-                Section("Additional Info") {
-                    TextField("Category (optional)", text: $category)
-                    TextField("Notes (optional)", text: $notes, axis: .vertical)
-                        .lineLimit(3...6)
-                }
+                .padding(.horizontal)
+                .padding(.top, 8)
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("New Task")
+            .toolbarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
