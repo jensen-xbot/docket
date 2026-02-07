@@ -77,6 +77,23 @@ enum Priority: Int, CaseIterable {
 - Use SF Symbols for icons (consistent with iOS)
 - Prefer native SwiftUI components over custom views
 
+## Build Verification (REQUIRED)
+⚠️ **After ANY code changes, ALWAYS run a build verification before presenting results to the user:**
+
+```bash
+cd /Users/johnyblueyes/Documents/Docket/docket/Docket && xcodebuild -project Docket.xcodeproj -scheme Docket -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build 2>&1 | tail -30
+```
+
+**Checklist before declaring done:**
+1. Run `xcodebuild` and confirm `** BUILD SUCCEEDED **`
+2. If build fails, fix ALL errors and re-run until it passes
+3. When creating new `.swift` files, you MUST add them to `project.pbxproj`:
+   - Add a `PBXFileReference` entry
+   - Add a `PBXBuildFile` entry
+   - Add the file ref to the correct `PBXGroup` (Models/, Views/, Utilities/, Managers/)
+   - Add the build file to the `PBXSourcesBuildPhase`
+4. Never present code changes as "done" without a passing build
+
 ## Testing Strategy
 - Unit tests for ViewModels (business logic)
 - UI tests for critical flows (create → complete → delete)

@@ -290,7 +290,7 @@ struct ShareTaskView: View {
         do {
             struct UserLookup: Codable { let id: UUID }
             let result: [UserLookup] = try await SupabaseConfig.client
-                .from("profiles")
+                .from("user_profiles")
                 .select("id")
                 .eq("email", value: email.lowercased())
                 .limit(1)

@@ -33,6 +33,9 @@
 		8E9C0F1B2A3B4C5D6E7F0126 /* ShareTaskView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F021E /* ShareTaskView.swift */; };
 		8E9C0F1B2A3B4C5D6E7F0127 /* ContactsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F021F /* ContactsListView.swift */; };
 		8E9C0F1B2A3B4C5D6E7F0128 /* ContactInsert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0220 /* ContactInsert.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0129 /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0221 /* UserProfile.swift */; };
+		8E9C0F1B2A3B4C5D6E7F012A /* CountryCodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0222 /* CountryCodes.swift */; };
+		8E9C0F1B2A3B4C5D6E7F012B /* EmojiPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0223 /* EmojiPickerView.swift */; };
 		AD6606E62F36F09B004CEBFE /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = AD6606E52F36F09B004CEBFE /* Supabase */; };
 /* End PBXBuildFile section */
 
@@ -64,6 +67,9 @@
 		8E9C0F1B2A3B4C5D6E7F021E /* ShareTaskView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareTaskView.swift; sourceTree = "<group>"; };
 		8E9C0F1B2A3B4C5D6E7F021F /* ContactsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsListView.swift; sourceTree = "<group>"; };
 		8E9C0F1B2A3B4C5D6E7F0220 /* ContactInsert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactInsert.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F0221 /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F0222 /* CountryCodes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CountryCodes.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F0223 /* EmojiPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiPickerView.swift; sourceTree = "<group>"; };
 		AD6606E72F36F4F0004CEBFE /* Docket.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Docket.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -117,6 +123,7 @@
 				8E9C0F1B2A3B4C5D6E7F0202 /* Task.swift */,
 				8E9C0F1B2A3B4C5D6E7F0218 /* GroceryStore.swift */,
 				8E9C0F1B2A3B4C5D6E7F0220 /* ContactInsert.swift */,
+				8E9C0F1B2A3B4C5D6E7F0221 /* UserProfile.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -137,6 +144,7 @@
 				8E9C0F1B2A3B4C5D6E7F021D /* GroceryItemsView.swift */,
 				8E9C0F1B2A3B4C5D6E7F021E /* ShareTaskView.swift */,
 				8E9C0F1B2A3B4C5D6E7F021F /* ContactsListView.swift */,
+				8E9C0F1B2A3B4C5D6E7F0223 /* EmojiPickerView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -147,6 +155,7 @@
 				8E9C0F1B2A3B4C5D6E7F0212 /* SupabaseConfig.swift */,
 				8E9C0F1B2A3B4C5D6E7F0203 /* Color+Extensions.swift */,
 				8E9C0F1B2A3B4C5D6E7F0204 /* Date+Extensions.swift */,
+				8E9C0F1B2A3B4C5D6E7F0222 /* CountryCodes.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -274,6 +283,9 @@
 				8E9C0F1B2A3B4C5D6E7F0125 /* GroceryItemsView.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0126 /* ShareTaskView.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0127 /* ContactsListView.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0129 /* UserProfile.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F012A /* CountryCodes.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F012B /* EmojiPickerView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
