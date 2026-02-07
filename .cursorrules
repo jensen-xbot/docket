@@ -91,3 +91,23 @@ This app is for Jon — a busy professional juggling sales work, side projects (
 - Focus on MVP first — local persistence only with SwiftData
 - v1.0 adds cloud sync via Supabase with data migration
 - PowerSync is an option if offline-first becomes critical before v1.0
+
+## Critical iOS Project Setup
+⚠️ **MUST HAVE in project.pbxproj buildSettings:**
+```
+INFOPLIST_KEY_UILaunchScreen_Generation = YES;  // Prevents letterbox/black bars
+INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+INFOPLIST_KEY_CFBundleDisplayName = Docket;
+INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;  // Requires AppIcon in Assets
+```
+Without `UILaunchScreen_Generation`, iOS runs app in legacy compatibility mode with black bars (looks like iPhone 4). See IOS-GOTCHAS.md for details.
+
+**Required Files:**
+- `Assets.xcassets/AppIcon.appiconset/Contents.json` (empty icon set satisfies build)
+- Real 1024x1024 icon can be added later
+
+**After build settings changes:**
+1. Delete app from simulator/device
+2. Clean Build Folder (Shift+Cmd+K)
+3. Run again (Cmd+R)
