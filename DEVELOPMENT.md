@@ -76,9 +76,14 @@ Each module has:
 
 ## Current Status
 
-**Phase:** 4 - Device Testing  
-**Next Module:** 4.3 - Device Testing  
-**Status:** MVP Complete (Phases 1-4), awaiting user testing
+**Phase:** 5 - Cloud Sync Foundation  
+**Next Module:** 5.6 - Sharing + Templates QA  
+**Status:** Core v1.0 features implemented (sync, auth, notifications, pin/reorder, templates, sharing UI)
+
+### Current Implementation Notes
+- Profile hub added for templates, notifications, and contacts management.
+- Grocery/Shopping categories support checklists and reusable store templates.
+- Task sharing uses contacts + invite flow (Supabase tables + share sheet UI).
 
 ### Post-MVP Roadmap
 

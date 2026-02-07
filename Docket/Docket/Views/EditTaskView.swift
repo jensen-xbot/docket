@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import _Concurrency
 
 struct EditTaskView: View {
     @Environment(\.modelContext) private var modelContext
@@ -11,11 +12,15 @@ struct EditTaskView: View {
     @State private var priority: Priority = .medium
     @State private var hasDueDate: Bool = false
     @State private var dueDate: Date = Date()
+    @State private var hasTime: Bool = false
+    @State private var dueTime: Date = Date()
     @State private var category: String = ""
     @State private var notes: String = ""
+    @State private var checklistItems: [ChecklistItem] = []
     @State private var showDeleteConfirm = false
     
     @FocusState private var titleFocused: Bool
+    @FocusState private var notesFocused: Bool
     
     private var isValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -29,6 +34,19 @@ struct EditTaskView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
+                    // Category (chip picker)
+                    CategoryPickerView(selectedCategory: $category)
+                        .onChange(of: category) {
+                            updateTitleForCategory()
+                        }
+                    
+                    Divider()
+                    
+                    if isChecklistCategory || !checklistItems.isEmpty {
+                        ChecklistEditorView(items: $checklistItems)
+                        Divider()
+                    }
+                    
                     // Title
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Title")
@@ -48,7 +66,7 @@ struct EditTaskView: View {
                     
                     Divider()
                     
-                    // Priority
+                    // Priority (dismisses keyboard on tap)
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Priority")
                             .font(.subheadline)
@@ -59,6 +77,10 @@ struct EditTaskView: View {
                             }
                         }
                         .pickerStyle(.segmented)
+                        .onChange(of: priority) {
+                            titleFocused = false
+                            notesFocused = false
+                        }
                     }
                     
                     Divider()
@@ -69,21 +91,26 @@ struct EditTaskView: View {
                             Label("Due Date", systemImage: "calendar")
                                 .font(.subheadline)
                         }
+                        .onChange(of: hasDueDate) {
+                            if !hasDueDate {
+                                hasTime = false
+                            }
+                        }
                         if hasDueDate {
                             DatePicker("", selection: $dueDate, displayedComponents: [.date])
                                 .datePickerStyle(.graphical)
                                 .transition(.opacity.combined(with: .move(edge: .top)))
+                            
+                            Toggle(isOn: $hasTime.animation(.easeInOut(duration: 0.2))) {
+                                Label("Set Time", systemImage: "clock")
+                                    .font(.subheadline)
+                            }
+                            
+                            if hasTime {
+                                DatePicker("", selection: $dueTime, displayedComponents: [.hourAndMinute])
+                                    .datePickerStyle(.compact)
+                            }
                         }
-                    }
-                    
-                    Divider()
-                    
-                    // Category
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Category")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        TextField("e.g. Work, Personal, Family", text: $category)
                     }
                     
                     Divider()
@@ -95,6 +122,7 @@ struct EditTaskView: View {
                             .foregroundStyle(.secondary)
                         TextField("Add any extra details...", text: $notes, axis: .vertical)
                             .lineLimit(3...8)
+                            .focused($notesFocused)
                     }
                     
                     Divider()
@@ -113,6 +141,7 @@ struct EditTaskView: View {
                 }
                 .padding(.horizontal)
                 .padding(.top, 8)
+                .padding(.bottom, 200)
             }
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Edit Task")
@@ -136,9 +165,13 @@ struct EditTaskView: View {
                 priority = task.priority
                 hasDueDate = task.dueDate != nil
                 if let due = task.dueDate { dueDate = due }
+                hasTime = task.hasTime
+                if let due = task.dueDate { dueTime = due }
                 category = task.category ?? ""
                 notes = task.notes ?? ""
+                checklistItems = task.checklistItems ?? []
                 titleFocused = true
+                updateTitleForCategory()
             }
         }
     }
@@ -146,16 +179,51 @@ struct EditTaskView: View {
     private func updateTask() {
         task.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         task.priority = priority
-        task.dueDate = hasDueDate ? dueDate : nil
+        task.dueDate = hasDueDate ? (hasTime ? combineDateAndTime(date: dueDate, time: dueTime) : dueDate) : nil
+        task.hasTime = hasTime
         task.category = category.isEmpty ? nil : category
         task.notes = notes.isEmpty ? nil : notes
+        task.checklistItems = checklistItems.isEmpty ? nil : checklistItems
         task.completedAt = task.isCompleted ? (task.completedAt ?? Date()) : nil
+        task.updatedAt = Date()
+        task.syncStatus = SyncStatus.pending.rawValue
+        _Concurrency.Task {
+            await NotificationManager.shared.scheduleNotification(for: task)
+        }
         dismiss()
     }
     
     private func deleteTask() {
         modelContext.delete(task)
+        _Concurrency.Task {
+            await NotificationManager.shared.cancelNotification(taskId: task.id)
+        }
         dismiss()
+    }
+    
+    private func updateTitleForCategory() {
+        let trimmedCategory = category.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lowercased = trimmedCategory.lowercased()
+        let special = ["groceries", "shopping"]
+        guard special.contains(lowercased) else { return }
+        let currentTitle = title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if currentTitle.isEmpty || special.contains(currentTitle) {
+            title = trimmedCategory.isEmpty ? "" : trimmedCategory.capitalized
+        }
+    }
+    
+    private var isChecklistCategory: Bool {
+        let lowercased = category.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return lowercased == "groceries" || lowercased == "shopping"
+    }
+    
+    private func combineDateAndTime(date: Date, time: Date) -> Date {
+        let calendar = Calendar.current
+        var dateComponents = calendar.dateComponents([.year, .month, .day], from: date)
+        let timeComponents = calendar.dateComponents([.hour, .minute], from: time)
+        dateComponents.hour = timeComponents.hour
+        dateComponents.minute = timeComponents.minute
+        return calendar.date(from: dateComponents) ?? date
     }
 }
 

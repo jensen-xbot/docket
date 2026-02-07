@@ -18,9 +18,13 @@ Jon — a busy professional juggling sales work, side projects (Closelo), family
 - Cloud sync across devices (Supabase)
 - User authentication (Apple Sign In + email)
 - Bi-directional sync with offline support
-- Due dates with local notifications
+- Due dates with local notifications (date + optional time)
 - Priority levels (high/medium/low)
 - Categories for organization
+- Pin + manual reorder
+- Grocery/Shopping templates + checklists
+- Task sharing with contacts + invite flow
+- Profile hub for templates + notifications + contacts
 - Zero data loss guarantee
 
 ### v1.1 Definition of Done (Voice-to-Task)
@@ -44,10 +48,14 @@ Jon — a busy professional juggling sales work, side projects (Closelo), family
 ### Should-Have (v1.0) - Cloud Sync Foundation
 1. **Cloud sync across devices** (Primary v1.0 Feature)
 2. User authentication (Apple Sign In)
-3. Due dates
+3. Due dates + time toggle
 4. Categories/tags
 5. Priority levels
 6. Local notifications
+7. Pin + manual reorder
+8. Grocery/Shopping templates + checklist items
+9. Task sharing (email invite flow)
+10. Profile hub (templates, notifications, contacts)
 
 ### Should-Have (v1.1) - Voice-to-Task
 1. **Voice-to-Task** (Primary v1.1 Feature)
@@ -64,13 +72,12 @@ Jon — a busy professional juggling sales work, side projects (Closelo), family
 5. Widgets
 6. Apple Watch app
 7. Multiple languages for voice
-8. Collaboration/sharing
+8. Shared task realtime presence
 
 ### Won't-Have (Explicitly Out of Scope)
-1. Collaboration/multi-user
-2. AI suggestions beyond voice parsing
-3. Advanced filtering/search
-4. Attachments/files
+1. AI suggestions beyond voice parsing
+2. Advanced filtering/search
+3. Attachments/files
 
 ## User Flows
 

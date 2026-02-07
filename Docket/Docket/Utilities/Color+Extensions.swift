@@ -77,4 +77,25 @@ extension Color {
     static var taskSecondaryFill: Color {
         Color(.secondarySystemFill)
     }
+
+    // MARK: - Category Colors
+
+    static var categoryGroceries: Color {
+        Color.green
+    }
+
+    static var categoryShopping: Color {
+        Color.purple
+    }
+
+    static func categoryColor(_ category: String?) -> Color? {
+        switch category?.lowercased() {
+        case "groceries":
+            return .categoryGroceries
+        case "shopping":
+            return .categoryShopping
+        default:
+            return nil
+        }
+    }
 }

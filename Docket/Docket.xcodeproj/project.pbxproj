@@ -18,6 +18,21 @@
 		8E9C0F1B2A3B4C5D6E7F0109 /* TaskRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0209 /* TaskRowView.swift */; };
 		8E9C0F1B2A3B4C5D6E7F0110 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0210 /* Assets.xcassets */; };
 		8E9C0F1B2A3B4C5D6E7F0111 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0211 /* Preview Assets.xcassets */; };
+		8E9C0F1B2A3B4C5D6E7F0112 /* SupabaseConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0212 /* SupabaseConfig.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0113 /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0213 /* AuthManager.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0114 /* SyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0214 /* SyncEngine.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0115 /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0215 /* AuthView.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0116 /* CategoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0216 /* CategoryStore.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0117 /* CategoryPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0217 /* CategoryPickerView.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0120 /* GroceryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0218 /* GroceryStore.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0121 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0219 /* NotificationManager.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0122 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F021A /* ProfileView.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0123 /* ChecklistEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F021B /* ChecklistEditorView.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0124 /* GroceryTemplateListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F021C /* GroceryTemplateListView.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0125 /* GroceryItemsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F021D /* GroceryItemsView.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0126 /* ShareTaskView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F021E /* ShareTaskView.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0127 /* ContactsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F021F /* ContactsListView.swift */; };
+		AD6606E62F36F09B004CEBFE /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = AD6606E52F36F09B004CEBFE /* Supabase */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -33,6 +48,21 @@
 		8E9C0F1B2A3B4C5D6E7F0209 /* TaskRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskRowView.swift; sourceTree = "<group>"; };
 		8E9C0F1B2A3B4C5D6E7F0210 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		8E9C0F1B2A3B4C5D6E7F0211 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F0212 /* SupabaseConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseConfig.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F0213 /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F0214 /* SyncEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngine.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F0215 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F0216 /* CategoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryStore.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F0217 /* CategoryPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryPickerView.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F0218 /* GroceryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroceryStore.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F0219 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F021A /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F021B /* ChecklistEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChecklistEditorView.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F021C /* GroceryTemplateListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroceryTemplateListView.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F021D /* GroceryItemsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroceryItemsView.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F021E /* ShareTaskView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareTaskView.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F021F /* ContactsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsListView.swift; sourceTree = "<group>"; };
+		AD6606E72F36F4F0004CEBFE /* Docket.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Docket.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -40,6 +70,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AD6606E62F36F09B004CEBFE /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -50,6 +81,7 @@
 			isa = PBXGroup;
 			children = (
 				8E9C0F1B2A3B4C5D6E7F0005 /* Docket */,
+				AD6606E42F36F09B004CEBFE /* Frameworks */,
 				8E9C0F1B2A3B4C5D6E7F0004 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -65,8 +97,10 @@
 		8E9C0F1B2A3B4C5D6E7F0005 /* Docket */ = {
 			isa = PBXGroup;
 			children = (
+				AD6606E72F36F4F0004CEBFE /* Docket.entitlements */,
 				8E9C0F1B2A3B4C5D6E7F0201 /* DocketApp.swift */,
 				8E9C0F1B2A3B4C5D6E7F0006 /* Models */,
+				8E9C0F1B2A3B4C5D6E7F000A /* Managers */,
 				8E9C0F1B2A3B4C5D6E7F0008 /* Utilities */,
 				8E9C0F1B2A3B4C5D6E7F0007 /* Views */,
 				8E9C0F1B2A3B4C5D6E7F0210 /* Assets.xcassets */,
@@ -79,6 +113,7 @@
 			isa = PBXGroup;
 			children = (
 				8E9C0F1B2A3B4C5D6E7F0202 /* Task.swift */,
+				8E9C0F1B2A3B4C5D6E7F0218 /* GroceryStore.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -86,11 +121,19 @@
 		8E9C0F1B2A3B4C5D6E7F0007 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				8E9C0F1B2A3B4C5D6E7F0215 /* AuthView.swift */,
+				8E9C0F1B2A3B4C5D6E7F021A /* ProfileView.swift */,
+				8E9C0F1B2A3B4C5D6E7F0217 /* CategoryPickerView.swift */,
+				8E9C0F1B2A3B4C5D6E7F021B /* ChecklistEditorView.swift */,
 				8E9C0F1B2A3B4C5D6E7F0205 /* AddTaskView.swift */,
 				8E9C0F1B2A3B4C5D6E7F0206 /* EditTaskView.swift */,
 				8E9C0F1B2A3B4C5D6E7F0207 /* EmptyListView.swift */,
 				8E9C0F1B2A3B4C5D6E7F0208 /* TaskListView.swift */,
 				8E9C0F1B2A3B4C5D6E7F0209 /* TaskRowView.swift */,
+				8E9C0F1B2A3B4C5D6E7F021C /* GroceryTemplateListView.swift */,
+				8E9C0F1B2A3B4C5D6E7F021D /* GroceryItemsView.swift */,
+				8E9C0F1B2A3B4C5D6E7F021E /* ShareTaskView.swift */,
+				8E9C0F1B2A3B4C5D6E7F021F /* ContactsListView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -98,6 +141,7 @@
 		8E9C0F1B2A3B4C5D6E7F0008 /* Utilities */ = {
 			isa = PBXGroup;
 			children = (
+				8E9C0F1B2A3B4C5D6E7F0212 /* SupabaseConfig.swift */,
 				8E9C0F1B2A3B4C5D6E7F0203 /* Color+Extensions.swift */,
 				8E9C0F1B2A3B4C5D6E7F0204 /* Date+Extensions.swift */,
 			);
@@ -110,6 +154,24 @@
 				8E9C0F1B2A3B4C5D6E7F0211 /* Preview Assets.xcassets */,
 			);
 			path = "Preview Content";
+			sourceTree = "<group>";
+		};
+		8E9C0F1B2A3B4C5D6E7F000A /* Managers */ = {
+			isa = PBXGroup;
+			children = (
+				8E9C0F1B2A3B4C5D6E7F0213 /* AuthManager.swift */,
+				8E9C0F1B2A3B4C5D6E7F0214 /* SyncEngine.swift */,
+				8E9C0F1B2A3B4C5D6E7F0216 /* CategoryStore.swift */,
+				8E9C0F1B2A3B4C5D6E7F0219 /* NotificationManager.swift */,
+			);
+			path = Managers;
+			sourceTree = "<group>";
+		};
+		AD6606E42F36F09B004CEBFE /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -156,6 +218,9 @@
 				Base,
 			);
 			mainGroup = 8E9C0F1B2A3B4C5D6E7F0003;
+			packageReferences = (
+				AD6606E32F36EF37004CEBFE /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
 			productRefGroup = 8E9C0F1B2A3B4C5D6E7F0004 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -184,13 +249,27 @@
 			files = (
 				8E9C0F1B2A3B4C5D6E7F0101 /* DocketApp.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0102 /* Task.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0112 /* SupabaseConfig.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0113 /* AuthManager.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0114 /* SyncEngine.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0103 /* Color+Extensions.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0104 /* Date+Extensions.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0115 /* AuthView.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0116 /* CategoryStore.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0117 /* CategoryPickerView.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0121 /* NotificationManager.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0120 /* GroceryStore.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0122 /* ProfileView.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0123 /* ChecklistEditorView.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0105 /* AddTaskView.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0106 /* EditTaskView.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0107 /* EmptyListView.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0108 /* TaskListView.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0109 /* TaskRowView.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0124 /* GroceryTemplateListView.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0125 /* GroceryItemsView.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0126 /* ShareTaskView.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0127 /* ContactsListView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -319,6 +398,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Docket/Docket.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
@@ -327,8 +407,8 @@
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				INFOPLIST_KEY_UIStatusBarStyle = "";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jensen.docket;
@@ -344,6 +424,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Docket/Docket.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -351,8 +432,8 @@
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				INFOPLIST_KEY_UIStatusBarStyle = "";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jensen.docket;
@@ -386,6 +467,25 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		AD6606E32F36EF37004CEBFE /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AD6606E52F36F09B004CEBFE /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AD6606E32F36EF37004CEBFE /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 8E9C0F1B2A3B4C5D6E7F0001 /* Project object */;
 }

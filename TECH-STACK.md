@@ -11,19 +11,17 @@
 - **Navigation:** SwiftUI NavigationStack
 
 ## Backend
-- **MVP:** Local only — no backend
-- **v1.0:** Supabase
+- **Current:** Supabase (Auth + Database)
 - **API Style:** REST (Supabase client SDK)
 
 ## Database
-- **MVP:** SwiftData (Apple's local persistence framework)
-- **v1.0:** PostgreSQL via Supabase
-- **Caching:** In-memory + SwiftData local cache
-- **File Storage:** N/A (no attachments in MVP)
+- **Local:** SwiftData (Apple's local persistence framework)
+- **Remote:** PostgreSQL via Supabase
+- **Caching:** SwiftData local cache + background sync
+- **File Storage:** N/A (no attachments)
 
 ## Auth
-- **MVP:** None (local device only)
-- **v1.0:** Supabase Auth (email/password or magic link)
+- **Current:** Supabase Auth (Apple Sign-In + email magic link)
 
 ## Infrastructure
 - **Hosting:** App Store for client, Supabase Cloud for backend (v1.0)
@@ -31,9 +29,9 @@
 - **Monitoring:** PostHog or Sentry (lightweight, privacy-focused)
 
 ## Integrations
-- **MVP:** None
-- **v1.0:** Apple Calendar (potential), Push Notifications
-- **v1.0-voice:** Siri Shortcuts, Apple Speech framework
+- **Current:** UserNotifications (local reminders)
+- **Near-term:** Supabase Realtime for shared tasks
+- **Voice-to-Task:** Siri Shortcuts, Apple Speech framework
 
 ## Voice-to-Task (v1.0)
 - **Speech Recognition:** Apple SpeechAnalyzer (on-device) / OpenAI Whisper API (cloud)

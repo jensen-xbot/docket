@@ -1,8 +1,10 @@
 import SwiftUI
 import SwiftData
+import _Concurrency
 
 struct TaskRowView: View {
     @Bindable var task: Task
+    var onShare: (() -> Void)? = nil
     
     var body: some View {
         HStack(spacing: 12) {
@@ -40,24 +42,81 @@ struct TaskRowView: View {
                     }
                     
                     if let category = task.category, !category.isEmpty {
-                        Text(category)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        let categoryColor = Color.categoryColor(category)
+                        if let categoryColor = categoryColor {
+                            HStack(spacing: 4) {
+                                Image(systemName: "cart.fill")
+                                    .font(.caption2)
+                                    .foregroundStyle(.white)
+                                    .padding(4)
+                                    .background(categoryColor)
+                                    .clipShape(Circle())
+                                Text(category)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } else {
+                            Text(category)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
             
             Spacer()
+            
+            if task.isShared {
+                Image(systemName: "person.2.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.blue)
+            }
+            
+            if let onShare = onShare {
+                Button(action: onShare) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            
+            Button(action: togglePinned) {
+                Image(systemName: task.isPinned ? "pin.fill" : "pin")
+                    .font(.caption)
+                    .foregroundStyle(task.isPinned ? .orange : .secondary)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.vertical, 8)
         .contentShape(Rectangle())
         .opacity(task.isCompleted ? 0.6 : 1.0)
+        .contextMenu {
+            Button {
+                togglePinned()
+            } label: {
+                Label(task.isPinned ? "Unpin" : "Pin", systemImage: task.isPinned ? "pin.slash" : "pin")
+            }
+        }
     }
     
     private func toggleCompleted() {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             task.isCompleted.toggle()
             task.completedAt = task.isCompleted ? Date() : nil
+            task.updatedAt = Date()
+            task.syncStatus = SyncStatus.pending.rawValue
+        }
+        _Concurrency.Task {
+            await NotificationManager.shared.scheduleNotification(for: task)
+        }
+    }
+    
+    private func togglePinned() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            task.isPinned.toggle()
+            task.updatedAt = Date()
+            task.syncStatus = SyncStatus.pending.rawValue
         }
     }
 }

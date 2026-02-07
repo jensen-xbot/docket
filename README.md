@@ -17,8 +17,9 @@ This is a learning project — a training ground for building full-stack iOS app
 ## Tech Stack
 
 - **Frontend:** SwiftUI (iOS 17+)
-- **Database:** SwiftData (MVP) → Supabase (v1.0)
-- **Auth:** Supabase Auth (v1.0)
+- **Database:** SwiftData + Supabase (sync)
+- **Auth:** Supabase Auth (Apple, email magic link)
+- **Notifications:** UserNotifications (local reminders)
 - **Platform:** iOS (iPhone)
 
 ## Project Structure
@@ -30,7 +31,7 @@ docket/
 ├── TECH-STACK.md       # Technology choices
 ├── TODO.md             # Living task list
 ├── QUESTIONNAIRE.md    # Discovery answers
-└── Docket/             # Xcode project (coming soon)
+└── Docket/             # Xcode project
 ```
 
 ## Design Inspiration
@@ -48,14 +49,14 @@ docket/
 
 ### MVP (Now)
 - Create, edit, complete, delete tasks
-- Local persistence
+- Local persistence + cloud sync
 - Clean native iOS UI
-
-### v1.0 (Next)
-- Cloud sync across devices
-- Due dates & notifications
-- Categories & priorities
-- Recurring tasks
+- Due dates + local notifications
+- Categories + priorities
+- Pin + manual reorder
+- Grocery/Shopping templates + checklists
+- Task sharing (email invite flow)
+- Profile hub (templates, notifications, contacts)
 
 ## Getting Started
 
@@ -64,7 +65,10 @@ Requirements:
 - iOS 17+ device or simulator
 - Apple Developer account (for device testing)
 
-Coming soon: Setup instructions once we initialize the Xcode project.
+Steps:
+1. Open `Docket/Docket.xcodeproj`
+2. Add the Supabase SDK via SPM (see `SUPABASE_SETUP.md`)
+3. Build + run on a simulator or device
 
 ## Budget
 

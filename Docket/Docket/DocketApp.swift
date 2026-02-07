@@ -3,16 +3,30 @@ import SwiftData
 
 @main
 struct DocketApp: App {
+    @State private var authManager = AuthManager()
+    
     var body: some Scene {
         WindowGroup {
-            TaskListView()
-                .tint(.blue)
+            Group {
+                if authManager.isAuthenticated {
+                    TaskListView(authManager: authManager)
+                        .tint(.blue)
+                } else {
+                    AuthView(authManager: authManager)
+                }
+            }
+            .onOpenURL { url in
+                authManager.handleAuthCallback(url: url)
+            }
+            .task {
+                await NotificationManager.shared.requestAuthorization()
+            }
         }
-        .modelContainer(for: Task.self)
+        .modelContainer(for: [Task.self, GroceryStore.self])
     }
 }
 
 #Preview {
     TaskListView()
-        .modelContainer(for: Task.self, inMemory: true)
+        .modelContainer(for: [Task.self, GroceryStore.self], inMemory: true)
 }

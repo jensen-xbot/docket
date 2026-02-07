@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import _Concurrency
 
 enum TaskFilter: String, CaseIterable {
     case all = "All"
@@ -12,6 +13,7 @@ class TaskListViewModel {
     var selectedFilter: TaskFilter = .all
     var searchText: String = ""
     var selectedPriority: Priority?
+    var selectedCategory: String?
     
     func filteredTasks(from tasks: [Task]) -> [Task] {
         var result = tasks
@@ -30,7 +32,13 @@ class TaskListViewModel {
             result = result.filter { $0.priority == priority }
         }
         
+        if let category = selectedCategory {
+            result = result.filter { $0.category == category }
+        }
+        
         return result.sorted {
+            if $0.isPinned != $1.isPinned { return $0.isPinned && !$1.isPinned }
+            if $0.sortOrder != $1.sortOrder { return $0.sortOrder < $1.sortOrder }
             if $0.isCompleted != $1.isCompleted { return !$0.isCompleted }
             if $0.priority.rawValue != $1.priority.rawValue { return $0.priority.rawValue > $1.priority.rawValue }
             if let d0 = $0.dueDate, let d1 = $1.dueDate { return d0 < d1 }
@@ -43,17 +51,24 @@ struct TaskListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Task.createdAt, order: .reverse) private var allTasks: [Task]
     
+    var authManager: AuthManager?
+    
     @State private var viewModel = TaskListViewModel()
     @State private var showingAddTask = false
     @State private var taskToEdit: Task?
+    @State private var taskToShare: Task?
+    @State private var syncEngine: SyncEngine?
     
     private var filteredTasks: [Task] {
         viewModel.filteredTasks(from: allTasks)
     }
 
+    @State private var categoryStore = CategoryStore()
+    
     private var hasActiveFilters: Bool {
         viewModel.selectedFilter != .all ||
         viewModel.selectedPriority != nil ||
+        viewModel.selectedCategory != nil ||
         !viewModel.searchText.isEmpty
     }
     
@@ -61,7 +76,9 @@ struct TaskListView: View {
         NavigationStack {
             Group {
                 if allTasks.isEmpty {
-                    EmptyListView()
+                    EmptyListView {
+                        showingAddTask = true
+                    }
                 } else if filteredTasks.isEmpty {
                     ContentUnavailableView {
                         Label("No Matching Tasks", systemImage: "line.3.horizontal.decrease.circle")
@@ -78,10 +95,40 @@ struct TaskListView: View {
                     filterMenu
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: { showingAddTask = true }) {
-                        Image(systemName: "plus")
-                            .fontWeight(.semibold)
+                    HStack(spacing: 12) {
+                        if let syncEngine = syncEngine, syncEngine.isSyncing {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        }
+
+                        // Profile
+                        if let authManager = authManager {
+                            NavigationLink {
+                                ProfileView(authManager: authManager)
+                            } label: {
+                                Image(systemName: "person.circle")
+                            }
+                        }
+
+                        // Show + only when tasks exist to avoid mis-taps on empty state
+                        if !allTasks.isEmpty {
+                            Button(action: { showingAddTask = true }) {
+                                Image(systemName: "plus")
+                                    .fontWeight(.semibold)
+                            }
+                        }
                     }
+                }
+            }
+            .refreshable {
+                await syncAll()
+            }
+            .onAppear {
+                if syncEngine == nil {
+                    syncEngine = SyncEngine(modelContext: modelContext)
+                }
+                _Concurrency.Task {
+                    await syncAll()
                 }
             }
             .fullScreenCover(isPresented: $showingAddTask) {
@@ -89,6 +136,9 @@ struct TaskListView: View {
             }
             .fullScreenCover(item: $taskToEdit) { task in
                 EditTaskView(task: task)
+            }
+            .sheet(item: $taskToShare) { task in
+                ShareTaskView(task: task)
             }
         }
         .searchable(text: $viewModel.searchText, prompt: "Search tasks")
@@ -124,6 +174,29 @@ struct TaskListView: View {
                     }
                 }
             }
+            Divider()
+            Menu("Category") {
+                Button {
+                    viewModel.selectedCategory = nil
+                } label: {
+                    if viewModel.selectedCategory == nil {
+                        Label("All", systemImage: "checkmark")
+                    } else {
+                        Text("All")
+                    }
+                }
+                ForEach(categoryStore.categories, id: \.self) { cat in
+                    Button {
+                        viewModel.selectedCategory = cat
+                    } label: {
+                        if viewModel.selectedCategory == cat {
+                            Label(cat, systemImage: "checkmark")
+                        } else {
+                            Text(cat)
+                        }
+                    }
+                }
+            }
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "line.3.horizontal.decrease")
@@ -139,7 +212,9 @@ struct TaskListView: View {
     private var taskList: some View {
         List {
             ForEach(filteredTasks) { task in
-                TaskRowView(task: task)
+                TaskRowView(task: task, onShare: {
+                    taskToShare = task
+                })
                     .contentShape(Rectangle())
                     .onTapGesture { taskToEdit = task }
                     .swipeActions(edge: .leading) {
@@ -147,6 +222,11 @@ struct TaskListView: View {
                             withAnimation {
                                 task.isCompleted.toggle()
                                 task.completedAt = task.isCompleted ? Date() : nil
+                                task.updatedAt = Date()
+                                task.syncStatus = SyncStatus.pending.rawValue
+                            }
+                            _Concurrency.Task {
+                                await syncEngine?.pushTask(task)
                             }
                         } label: {
                             Label(task.isCompleted ? "Undo" : "Complete",
@@ -156,17 +236,48 @@ struct TaskListView: View {
                     }
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
-                            withAnimation { modelContext.delete(task) }
+                            // Capture data BEFORE deleting
+                            let taskId = task.id
+                            let taskSyncStatus = task.syncStatus
+                            withAnimation {
+                                modelContext.delete(task)
+                            }
+                            _Concurrency.Task {
+                                await NotificationManager.shared.cancelNotification(taskId: taskId)
+                                await syncEngine?.deleteRemoteTask(id: taskId, syncStatus: taskSyncStatus)
+                            }
                         } label: { Label("Delete", systemImage: "trash") }
                     }
             }
             .onDelete { indexSet in
+                let tasksInfo = indexSet.map { (filteredTasks[$0].id, filteredTasks[$0].syncStatus) }
                 for index in indexSet {
                     modelContext.delete(filteredTasks[index])
+                }
+                _Concurrency.Task {
+                    for (taskId, syncStatus) in tasksInfo {
+                        await NotificationManager.shared.cancelNotification(taskId: taskId)
+                        await syncEngine?.deleteRemoteTask(id: taskId, syncStatus: syncStatus)
+                    }
+                }
+            }
+            .onMove { indices, newOffset in
+                var reordered = filteredTasks
+                reordered.move(fromOffsets: indices, toOffset: newOffset)
+                for (index, task) in reordered.enumerated() {
+                    task.sortOrder = index
+                    task.updatedAt = Date()
+                    task.syncStatus = SyncStatus.pending.rawValue
                 }
             }
         }
         .listStyle(.plain)
+        .environment(\.editMode, .constant(.active))
+    }
+    
+    private func syncAll() async {
+        guard let syncEngine = syncEngine else { return }
+        await syncEngine.syncAll()
     }
 }
 
