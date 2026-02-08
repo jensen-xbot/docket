@@ -72,10 +72,10 @@ Users can dictate one or many tasks naturally. The system transcribes speech on-
 │  │ OpenRouter API Call    │  │
 │  │ (API key stored here)  │  │
 │  │                        │  │
-│  │ Model: deepseek/       │  │
-│  │ deepseek-r1 or         │  │
-│  │ anthropic/claude-3.5   │  │
-│  │ or openai/gpt-4o-mini  │  │
+│  │ Model: openai/         │  │
+│  │ gpt-4o-mini (primary)  │  │
+│  │ or groq/               │  │
+│  │ llama-3.1-70b (budget) │  │
 │  └───────────┬────────────┘  │
 │              │               │
 │  ┌───────────▼────────────┐  │
@@ -119,22 +119,45 @@ Users can dictate one or many tasks naturally. The system transcribes speech on-
 - Supabase Edge Functions are free tier compatible
 - Rate limiting and usage tracking built in
 
-### Model Recommendation
+### Model Recommendation (Updated Feb 2025)
+
 For task parsing (structured extraction + suggestions), you want a model that's:
-- Fast (< 2 seconds for parsing)
-- Good at structured output (JSON)
-- Affordable
+- **Fast** (< 1 second response)
+- **Structured output** reliable (JSON schema)
+- **Cheap** (pennies per call)
 
-| Model | Speed | Quality | Cost (per 1M tokens) | Recommendation |
-|-------|-------|---------|---------------------|----------------|
-| **gpt-4o-mini** | Fast | Great | ~$0.15 in / $0.60 out | Best balance |
-| **deepseek-chat** | Fast | Good | ~$0.14 in / $0.28 out | Budget pick |
-| **claude-3.5-haiku** | Fast | Great | ~$0.25 in / $1.25 out | Alternative |
-| **deepseek-r1** | Slower | Best | ~$0.55 in / $2.19 out | Overkill for this |
+❌ **Avoid "Thinking" models** (DeepSeek-R1, Kimi K2.5, o1): They're 3-10x slower, more expensive, and overkill for simple extraction. Task parsing is pattern matching, not complex reasoning.
 
-**Recommendation: Start with `gpt-4o-mini` via OpenRouter.** It's the best balance of speed, quality, and cost for structured task extraction. Thinking models (deepseek-r1, Kimi K2.5) are overkill here -- task parsing is a straightforward extraction problem, not a reasoning problem.
+✅ **Recommended Models:**
 
-You can switch models later with zero app changes (just update the Edge Function).
+| Model | Speed | Cost (per 1M tokens) | Best For |
+|-------|-------|---------------------|----------|
+| **gpt-4o-mini** ⭐ | Very fast | ~$0.15 in / $0.60 out | **Primary choice** — best structured output |
+| **llama-3.1-70b (Groq)** | Ultra fast | ~$0.05 in / $0.10 out | **Budget/fastest** — great for simple parsing |
+| **mistral-small** | Fast | ~$0.20 in / $0.60 out | GDPR-friendly alternative |
+| **claude-3-5-haiku** | Fast | ~$0.25 in / $1.25 out | If OpenAI unavailable |
+
+| Quirky Model | Speed | Cost | Use Case |
+|-------------|-------|------|----------|
+| **deepseek-chat** | Fast | ~$0.14 in / $0.28 out | Chat/instructions, not structured JSON |
+| **deepseek-r1** | Slow (3-5s) | ~$0.55 in / $2.19 out | ❌ Overkill for extraction |
+| **Kimi K2.5** | Slow (3-5s) | ~$0.50+ | ❌ Overkill, slow |
+
+**Primary Recommendation: `openai/gpt-4o-mini` via OpenRouter**
+- Lightning fast (<500ms)
+- Native JSON mode support
+- Reliable schema adherence
+- ~$0.001 per task extracted
+
+**Budget Alternative: `groq/llama-3.1-70b-versatile` via OpenRouter**
+- Even faster (<200ms)
+- 3x cheaper
+- Nearly as accurate for simple extraction
+- Good if gpt-4o-mini unavailable
+
+**Why not thinking models?** DeepSeek-R1 and Kimi K2.5 spend 3-5 seconds "thinking" before responding. Users don't want to wait 5 seconds after speaking — they want instant task creation.
+
+**Switching models:** Zero app changes required — just update the Edge Function environment variable.
 
 ---
 
