@@ -21,7 +21,10 @@ struct DocketApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if authManager.isAuthenticated {
+                if authManager.isCheckingSession {
+                    // Splash screen while verifying saved session
+                    SplashView()
+                } else if authManager.isAuthenticated {
                     TaskListView(authManager: authManager)
                         .tint(.blue)
                 } else {
@@ -54,6 +57,43 @@ struct DocketApp: App {
             IngredientLibrary.self,
             configurations: config
         )
+    }
+}
+
+// MARK: - Splash Screen
+
+private struct SplashView: View {
+    @State private var logoScale: CGFloat = 0.8
+    @State private var logoOpacity: Double = 0.0
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Image("DocketLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 120, height: 120)
+                .clipShape(RoundedRectangle(cornerRadius: 28))
+                .shadow(color: .black.opacity(0.1), radius: 10, y: 4)
+                .scaleEffect(logoScale)
+                .opacity(logoOpacity)
+            
+            Text("Docket")
+                .font(.system(size: 32, weight: .bold))
+                .opacity(logoOpacity)
+            
+            ProgressView()
+                .controlSize(.regular)
+                .padding(.top, 8)
+                .opacity(logoOpacity)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemBackground))
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.5)) {
+                logoScale = 1.0
+                logoOpacity = 1.0
+            }
+        }
     }
 }
 

@@ -10,6 +10,7 @@ class AuthManager {
     private let supabase = SupabaseConfig.client
     
     var isAuthenticated = false
+    var isCheckingSession = true
     var isLoading = false
     var errorMessage: String?
     
@@ -20,12 +21,22 @@ class AuthManager {
     
     private func checkAuthState() {
         _Concurrency.Task {
+            let startTime = Date()
+            
             do {
                 let session = try await supabase.auth.session
                 self.isAuthenticated = !session.isExpired
             } catch {
                 self.isAuthenticated = false
             }
+            
+            // Ensure splash shows for at least 2 seconds on cold start
+            let elapsed = Date().timeIntervalSince(startTime)
+            if elapsed < 2.0 {
+                try? await _Concurrency.Task.sleep(for: .seconds(2.0 - elapsed))
+            }
+            
+            self.isCheckingSession = false
         }
     }
     
@@ -39,6 +50,7 @@ class AuthManager {
                     } else {
                         self.isAuthenticated = false
                     }
+                    // Don't set isCheckingSession here — let checkAuthState() control the splash timing
                 case .signedIn:
                     self.isAuthenticated = true
                 case .signedOut:

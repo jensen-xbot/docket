@@ -8,6 +8,7 @@ struct TaskRowView: View {
     var onShare: (() -> Void)? = nil
     var currentUserProfile: UserProfile?
     var sharerProfile: UserProfile?
+    private var categoryStore: CategoryStore { CategoryStore.shared }
     
     var body: some View {
         HStack(spacing: 0) {
@@ -38,30 +39,24 @@ struct TaskRowView: View {
                         .lineLimit(2)
                     
                     HStack(spacing: 6) {
+                        // Priority arrow
                         Image(systemName: task.priority.icon)
                             .font(.caption2)
                             .foregroundStyle(Color.priorityColor(task.priority))
                         
-                        if let dueDate = task.dueDate {
-                            HStack(spacing: 2) {
-                                Image(systemName: "calendar")
-                                    .font(.caption2)
-                                Text(dueDate.formattedDueDate)
-                                    .font(.caption)
-                            }
-                            .foregroundStyle(Color.dueDateColor(for: task))
-                        }
-                        
+                        // Category icon + label (right of priority)
                         if let category = task.category, !category.isEmpty {
-                            let categoryColor = Color.categoryColor(category)
-                            if let categoryColor = categoryColor {
+                            if let categoryItem = categoryStore.find(byName: category) {
+                                let catColor = Color(hex: categoryItem.color) ?? .gray
                                 HStack(spacing: 4) {
-                                    Image(systemName: "cart.fill")
+                                    Image(systemName: categoryItem.icon)
                                         .font(.caption2)
-                                        .foregroundStyle(.white)
+                                        .foregroundStyle(catColor)
                                         .padding(4)
-                                        .background(categoryColor)
-                                        .clipShape(Circle())
+                                        .background(
+                                            Circle()
+                                                .stroke(catColor, lineWidth: 1.5)
+                                        )
                                     Text(category)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
@@ -70,6 +65,24 @@ struct TaskRowView: View {
                                 Text(category)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                            }
+                        }
+                        
+                        // Due date in circle (right of category)
+                        if let dueDate = task.dueDate {
+                            let dateColor = Color.dueDateColor(for: task)
+                            HStack(spacing: 4) {
+                                Image(systemName: "calendar")
+                                    .font(.caption2)
+                                    .foregroundStyle(dateColor)
+                                    .padding(4)
+                                    .background(
+                                        Circle()
+                                            .stroke(dateColor, lineWidth: 1.5)
+                                    )
+                                Text(dueDate.formattedDueDate)
+                                    .font(.caption)
+                                    .foregroundStyle(dateColor)
                             }
                         }
                     }

@@ -27,12 +27,13 @@ This is a learning project — a training ground for building full-stack iOS app
 
 ```
 docket/
-├── PRD.md              # Product Requirements Document
-├── ADR.md              # Architecture Decision Records
-├── TECH-STACK.md       # Technology choices
-├── TODO.md             # Living task list
-├── QUESTIONNAIRE.md    # Discovery answers
-└── Docket/             # Xcode project
+├── PRD.md                # Product Requirements Document
+├── ADR.md                # Architecture Decision Records
+├── TECH-STACK.md         # Technology choices
+├── TODO.md               # Living task list
+├── APP-STORE-GUIDE.md    # TestFlight & App Store publishing guide
+├── QUESTIONNAIRE.md      # Discovery answers
+└── Docket/               # Xcode project
 ```
 
 ## Design Inspiration
@@ -53,11 +54,14 @@ docket/
 - Local persistence + cloud sync
 - Clean native iOS UI
 - Due dates + local notifications
-- Categories + priorities
+- Categories with custom icons and colors
+- Priorities with visual indicators
 - Pin + manual reorder
 - Grocery/Shopping templates + checklists
 - Task sharing (email + text invite flow, auto-accept)
 - Profile hub (templates, notifications, contacts)
+- Branded splash screen with auth session check
+- Inline edit mode for categories and stores (rename, delete, customize)
 
 ## Getting Started
 

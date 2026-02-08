@@ -29,6 +29,14 @@ class StoreStore {
         save()
     }
     
+    func rename(oldName: String, newName: String) {
+        guard let index = stores.firstIndex(where: { $0 == oldName }) else { return }
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !stores.contains(where: { $0.lowercased() == trimmed.lowercased() && $0 != oldName }) else { return }
+        stores[index] = trimmed
+        save()
+    }
+    
     func contains(_ store: String) -> Bool {
         stores.contains(where: { $0.lowercased() == store.lowercased() })
     }

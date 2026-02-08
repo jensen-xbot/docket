@@ -66,7 +66,7 @@ struct TaskListView: View {
         viewModel.filteredTasks(from: allTasks)
     }
 
-    @State private var categoryStore = CategoryStore()
+    private var categoryStore: CategoryStore { CategoryStore.shared }
     
     private var hasActiveFilters: Bool {
         viewModel.selectedFilter != .all ||
@@ -199,14 +199,14 @@ struct TaskListView: View {
                         Text("All")
                     }
                 }
-                ForEach(categoryStore.categories, id: \.self) { cat in
+                ForEach(categoryStore.categories) { categoryItem in
                     Button {
-                        viewModel.selectedCategory = cat
+                        viewModel.selectedCategory = categoryItem.name
                     } label: {
-                        if viewModel.selectedCategory == cat {
-                            Label(cat, systemImage: "checkmark")
+                        if viewModel.selectedCategory == categoryItem.name {
+                            Label(categoryItem.name, systemImage: "checkmark")
                         } else {
-                            Text(cat)
+                            Text(categoryItem.name)
                         }
                     }
                 }

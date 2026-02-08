@@ -13,6 +13,13 @@
 - [x] Implement delete task
 - [x] Add local persistence (SwiftData)
 - [x] Basic UI polish (dark mode, animations)
+- [x] Branded splash screen with auth session check
+- [x] Category model upgrade (icons + colors via CategoryItem)
+- [x] Category icon/color picker (32 icons, 10 colors)
+- [x] Inline edit mode for categories (rename, delete, icon/color)
+- [x] Inline edit mode for stores (rename, delete)
+- [x] Task row UI refresh (category icons/colors, outlined due date badges)
+- [x] CategoryStore singleton for consistent state across views
 - [ ] Test on physical device (AWAITING USER)
 
 ## v1.0: Cloud Sync Foundation (Priority #1)
@@ -59,8 +66,7 @@
 - [ ] Widgets
 - [ ] Apple Watch app
 - [ ] Multiple languages for voice
-- [ ] Collaboration/sharing
-- [ ] App Store submission (after v1.0 testing)
+- [ ] App Store submission (see APP-STORE-GUIDE.md)
 
 ## Technical Decisions Made
 
