@@ -19,8 +19,8 @@ This is a learning project — a training ground for building full-stack iOS app
 - **Frontend:** SwiftUI (iOS 17+)
 - **Database:** SwiftData + Supabase (sync)
 - **Auth:** Supabase Auth (Apple, email magic link)
-- **Notifications:** UserNotifications (local reminders)
-- **Sharing:** MessageUI (email + SMS), Contacts framework (contact picker)
+- **Notifications:** UserNotifications (local) + APNs (push for shared tasks)
+- **Sharing:** MessageUI (email + SMS), Contacts framework (contact picker), Supabase Edge Functions (share push)
 - **Platform:** iOS (iPhone)
 
 ## Project Structure
@@ -56,7 +56,7 @@ docket/
 - Categories + priorities
 - Pin + manual reorder
 - Grocery/Shopping templates + checklists
-- Task sharing (email + text invite flow)
+- Task sharing (email + text invite flow, auto-accept)
 - Profile hub (templates, notifications, contacts)
 
 ## Getting Started
@@ -70,6 +70,13 @@ Steps:
 1. Open `Docket/Docket.xcodeproj`
 2. Add the Supabase SDK via SPM (see `SUPABASE_SETUP.md`)
 3. Build + run on a simulator or device
+
+### Sharing + Push Notifications Setup
+1. Apply migration `supabase/migrations/010_sharing_v2.sql`
+2. Deploy Edge Function: `supabase functions deploy push-share-notification`
+3. Add APNs secrets in Supabase Edge Functions settings
+4. Create DB webhook for `task_shares` INSERT → Edge Function
+5. Enable **Push Notifications** capability in Xcode
 
 ## Budget
 

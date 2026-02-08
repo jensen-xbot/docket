@@ -11,7 +11,7 @@
 - **Navigation:** SwiftUI NavigationStack
 
 ## Backend
-- **Current:** Supabase (Auth + Database)
+- **Current:** Supabase (Auth + Database + Edge Functions)
 - **API Style:** REST (Supabase client SDK)
 
 ## Database
@@ -30,6 +30,7 @@
 
 ## Integrations
 - **Current:** UserNotifications (local reminders)
+- **Current:** APNs (push notifications for shared tasks)
 - **Current:** MessageUI (email/SMS compose), Contacts (device picker)
 - **Near-term:** Supabase Realtime for shared tasks
 - **Voice-to-Task:** Siri Shortcuts, Apple Speech framework

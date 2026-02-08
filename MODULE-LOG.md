@@ -101,6 +101,17 @@
 
 ---
 
+### Phase 5: Cloud Sync Foundation ✅ COMPLETE
+
+**Module 5.6: Sharing + Push Notifications**
+- Auto-accept shared tasks via Supabase triggers
+- Push notifications via Edge Function + APNs
+- Shared task collaboration (recipients can edit)
+- Shared avatar overlay + row accent
+- Remove-from-list for shared tasks
+
+---
+
 ## Known Issues / TODOs
 
 1. No physical device testing yet (requires Apple Developer account)

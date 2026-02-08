@@ -78,12 +78,12 @@ Each module has:
 
 **Phase:** 5 - Cloud Sync Foundation  
 **Next Module:** 5.6 - Sharing + Templates QA  
-**Status:** Core v1.0 features implemented (sync, auth, notifications, pin/reorder, templates, sharing UI)
+**Status:** Sharing now includes auto-accept + push notifications; core v1.0 features implemented (sync, auth, notifications, pin/reorder, templates, sharing UI)
 
 ### Current Implementation Notes
 - Profile hub added for templates, notifications, and contacts management.
 - Grocery/Shopping categories support checklists and reusable store templates.
-- Task sharing uses contacts + invite flow (email + SMS compose, Supabase tables).
+- Task sharing uses contacts + invite flow (email + SMS compose, Supabase tables) with auto-accept and push notifications.
 - Contacts import via device picker (requires Contacts permission key in Info.plist).
 
 ### Post-MVP Roadmap

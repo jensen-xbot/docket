@@ -11,6 +11,10 @@
   - `004_add_has_time.sql` (has_time flag)
   - `005_sharing.sql` (contacts + task_shares + invitations)
   - `006_contacts_phone.sql` (contacts phone number)
+  - `007_profile_enhancements.sql` (phone, country_code, avatar_emoji + avatars bucket)
+  - `008_migrate_country_code_to_iso.sql` (country code migration)
+  - `009_ingredients_library.sql` (ingredients library)
+  - `010_sharing_v2.sql` (auto-accept shares, push notifications, device_tokens)
 
 ## Manual Configuration Steps
 
@@ -78,8 +82,35 @@ Run these in order in Supabase SQL Editor:
 4. `supabase/migrations/004_add_has_time.sql`
 5. `supabase/migrations/005_sharing.sql`
 6. `supabase/migrations/006_contacts_phone.sql`
+7. `supabase/migrations/007_profile_enhancements.sql`
+8. `supabase/migrations/008_migrate_country_code_to_iso.sql`
+9. `supabase/migrations/009_ingredients_library.sql`
+10. `supabase/migrations/010_sharing_v2.sql`
 
-### 6. Test the Setup
+### 6. Sharing + Push Notifications
+
+**APNs Secrets (Supabase > Edge Functions > Secrets):**
+- `APNS_KEY_ID`
+- `APNS_TEAM_ID`
+- `APNS_PRIVATE_KEY` (full .p8 contents)
+- `APNS_BUNDLE_ID` (`com.jensen.docket`)
+- `APNS_PRODUCTION` (`false` for dev)
+
+**Deploy Edge Function:**
+```bash
+supabase functions deploy push-share-notification
+```
+
+**Create DB Webhook:**
+- Table: `task_shares`
+- Event: INSERT
+- Target: Edge Function `push-share-notification`
+- Add auth header with service role key
+
+**Xcode Capability:**
+- Add **Push Notifications** in Signing & Capabilities
+
+### 7. Test the Setup
 
 1. Build and run the app
 2. You should see the **AuthView** on first launch
@@ -112,7 +143,15 @@ Run these in order in Supabase SQL Editor:
 - Verify `task_shares` and `contacts` tables exist (migration 005)
 - Ensure RLS policies are enabled for `task_shares` and `contacts`
 - Verify `contacts.contact_phone` exists (migration 006)
-- Ensure `profiles` table has `email` column for share lookup
+- Ensure `user_profiles.email` exists for share lookup
+- Verify `device_tokens` table exists (migration 010)
+- Verify `resolve_share_recipient_trigger` exists (migration 010)
+
+### Push notifications not arriving
+- Confirm APNs secrets are set in Edge Functions
+- Verify Edge Function deployed: `push-share-notification`
+- Confirm DB webhook exists for `task_shares` INSERT
+- Confirm device token stored in `device_tokens`
 
 ### Grocery templates missing
 - Verify `grocery_stores` table exists (migration 003)

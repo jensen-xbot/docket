@@ -106,6 +106,21 @@
   - Can fall back to patterns if offline
 - **Date:** 2026-02-06
 
+## ADR-008: Task Sharing + Push Notifications (v1.0)
+- **Decision:** Auto-accept shares, push notifications via Supabase Edge Function + APNs
+- **Context:** Shared tasks must appear instantly for recipients, with a notification that deep-links to the task.
+- **Options Considered:**
+  - Manual accept/decline flow (adds friction, extra UI)
+  - Auto-accept share and allow remove from list (fast, Reminders-like)
+  - Local notification only (requires app open, misses real-time push)
+  - APNs push via Supabase Edge Function (real push, supports deep-link)
+- **Decision:** Auto-accept shares; send APNs push from Edge Function on `task_shares` INSERT.
+- **Consequences:**
+  - Fast, low-friction sharing for families
+  - Requires APNs key setup and Edge Function secrets
+  - Simple deep-link: push payload includes `task_id`
+- **Date:** 2026-02-08
+
 ## Known Risks
 
 1. **SwiftData maturity:** Newer framework, may have undiscovered bugs or limitations

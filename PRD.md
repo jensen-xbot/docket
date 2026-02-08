@@ -23,7 +23,8 @@ Jon — a busy professional juggling sales work, side projects (Closelo), family
 - Categories for organization
 - Pin + manual reorder
 - Grocery/Shopping templates + checklists
-- Task sharing with contacts + invite flow (email + text)
+- Task sharing with contacts (auto-accept, shared task collaboration)
+- Push notifications for new shared tasks (APNs)
 - Profile hub for templates + notifications + contacts
 - Zero data loss guarantee
 
@@ -54,8 +55,9 @@ Jon — a busy professional juggling sales work, side projects (Closelo), family
 6. Local notifications
 7. Pin + manual reorder
 8. Grocery/Shopping templates + checklist items
-9. Task sharing (email + text invite flow)
-10. Profile hub (templates, notifications, contacts)
+9. Task sharing (email + text invite flow, auto-accept)
+10. Push notifications for shared tasks
+11. Profile hub (templates, notifications, contacts)
 
 ### Should-Have (v1.1) - Voice-to-Task
 1. **Voice-to-Task** (Primary v1.1 Feature)
