@@ -39,6 +39,8 @@
 		8E9C0F1B2A3B4C5D6E7F012D /* IngredientLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0224 /* IngredientLibrary.swift */; };
 		8E9C0F1B2A3B4C5D6E7F012E /* StoreStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0225 /* StoreStore.swift */; };
 		8E9C0F1B2A3B4C5D6E7F012F /* StorePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0226 /* StorePickerView.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0130 /* PushNotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0230 /* PushNotificationManager.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0131 /* SharedAvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0231 /* SharedAvatarView.swift */; };
 		AD6606E62F36F09B004CEBFE /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = AD6606E52F36F09B004CEBFE /* Supabase */; };
 		AD6606E92F37934E004CEBFE /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = AD6606E82F37934E004CEBFE /* AppIcon.icon */; };
 /* End PBXBuildFile section */
@@ -78,6 +80,8 @@
 		8E9C0F1B2A3B4C5D6E7F0225 /* StoreStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreStore.swift; sourceTree = "<group>"; };
 		8E9C0F1B2A3B4C5D6E7F0226 /* StorePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorePickerView.swift; sourceTree = "<group>"; };
 		8E9C0F1B2A3B4C5D6E7F0227 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F0230 /* PushNotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotificationManager.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F0231 /* SharedAvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedAvatarView.swift; sourceTree = "<group>"; };
 		AD6606E72F36F4F0004CEBFE /* Docket.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Docket.entitlements; sourceTree = "<group>"; };
 		AD6606E82F37934E004CEBFE /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -158,6 +162,7 @@
 				8E9C0F1B2A3B4C5D6E7F021F /* ContactsListView.swift */,
 				8E9C0F1B2A3B4C5D6E7F0223 /* EmojiPickerView.swift */,
 				8E9C0F1B2A3B4C5D6E7F0226 /* StorePickerView.swift */,
+				8E9C0F1B2A3B4C5D6E7F0231 /* SharedAvatarView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -189,6 +194,7 @@
 				8E9C0F1B2A3B4C5D6E7F0216 /* CategoryStore.swift */,
 				8E9C0F1B2A3B4C5D6E7F0219 /* NotificationManager.swift */,
 				8E9C0F1B2A3B4C5D6E7F0225 /* StoreStore.swift */,
+				8E9C0F1B2A3B4C5D6E7F0230 /* PushNotificationManager.swift */,
 			);
 			path = Managers;
 			sourceTree = "<group>";
@@ -280,6 +286,7 @@
 				8E9C0F1B2A3B4C5D6E7F0112 /* SupabaseConfig.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0113 /* AuthManager.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0114 /* SyncEngine.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0130 /* PushNotificationManager.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0103 /* Color+Extensions.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0104 /* Date+Extensions.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0115 /* AuthView.swift in Sources */,
@@ -298,6 +305,7 @@
 				8E9C0F1B2A3B4C5D6E7F0125 /* GroceryItemsView.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0126 /* ShareTaskView.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0127 /* ContactsListView.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0131 /* SharedAvatarView.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0129 /* UserProfile.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F012A /* CountryCodes.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F012B /* EmojiPickerView.swift in Sources */,

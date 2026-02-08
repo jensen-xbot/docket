@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import _Concurrency
+import Combine
 
 enum TaskFilter: String, CaseIterable {
     case all = "All"
@@ -59,6 +60,8 @@ struct TaskListView: View {
     @State private var taskToShare: Task?
     @State private var syncEngine: SyncEngine?
     @State private var editMode: EditMode = .inactive
+    @State private var currentUserProfile: UserProfile?
+    @State private var pendingTaskId: UUID?
     
     private var filteredTasks: [Task] {
         viewModel.filteredTasks(from: allTasks)
@@ -75,78 +78,89 @@ struct TaskListView: View {
     
     var body: some View {
         NavigationStack {
-            Group {
-                if allTasks.isEmpty {
-                    EmptyListView {
-                        showingAddTask = true
-                    }
-                } else if filteredTasks.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Matching Tasks", systemImage: "line.3.horizontal.decrease.circle")
-                    } description: {
-                        Text("Try adjusting your filters or search.")
-                    }
-                } else {
-                    taskList
+            mainContent
+                .navigationTitle("Docket")
+                .toolbar { toolbarContent }
+                .refreshable { await syncAll() }
+                .onAppear(perform: onViewAppear)
+                .onChange(of: pendingTaskId) { _, taskId in
+                    handlePendingTaskNavigation(taskId)
                 }
-            }
-            .navigationTitle("Docket")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    filterMenu
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: 12) {
-                        if let syncEngine = syncEngine, syncEngine.isSyncing {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                        }
-
-                        Button(editMode == .active ? "Done" : "Reorder") {
-                            editMode = editMode == .active ? .inactive : .active
-                        }
-
-                        // Profile
-                        if let authManager = authManager {
-                            NavigationLink {
-                                ProfileView(authManager: authManager)
-                            } label: {
-                                Image(systemName: "person.circle")
-                            }
-                        }
-
-                        // Show + only when tasks exist to avoid mis-taps on empty state
-                        if !allTasks.isEmpty {
-                            Button(action: { showingAddTask = true }) {
-                                Image(systemName: "plus")
-                                    .fontWeight(.semibold)
-                            }
-                        }
+                .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PendingTaskNavigation"))) { notification in
+                    if let taskId = notification.object as? UUID {
+                        pendingTaskId = taskId
                     }
                 }
-            }
-            .refreshable {
-                await syncAll()
-            }
-            .onAppear {
-                if syncEngine == nil {
-                    syncEngine = SyncEngine(modelContext: modelContext)
-                }
-                _Concurrency.Task {
-                    await syncAll()
-                }
-            }
-            .fullScreenCover(isPresented: $showingAddTask) {
-                AddTaskView()
-            }
-            .fullScreenCover(item: $taskToEdit) { task in
-                EditTaskView(task: task)
-            }
-            .sheet(item: $taskToShare) { task in
-                ShareTaskView(task: task)
-            }
+                .fullScreenCover(isPresented: $showingAddTask) { AddTaskView() }
+                .fullScreenCover(item: $taskToEdit) { task in EditTaskView(task: task) }
+                .sheet(item: $taskToShare) { task in ShareTaskView(task: task) }
         }
         .searchable(text: $viewModel.searchText, prompt: "Search tasks")
+    }
+    
+    @ViewBuilder
+    private var mainContent: some View {
+        if allTasks.isEmpty {
+            EmptyListView {
+                showingAddTask = true
+            }
+        } else if filteredTasks.isEmpty {
+            ContentUnavailableView {
+                Label("No Matching Tasks", systemImage: "line.3.horizontal.decrease.circle")
+            } description: {
+                Text("Try adjusting your filters or search.")
+            }
+        } else {
+            taskList
+        }
+    }
+    
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            filterMenu
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            trailingToolbar
+        }
+    }
+    
+    private var trailingToolbar: some View {
+        HStack(spacing: 12) {
+            if let syncEngine = syncEngine, syncEngine.isSyncing {
+                ProgressView()
+                    .scaleEffect(0.8)
+            }
+            
+            Button(editMode == .active ? "Done" : "Reorder") {
+                editMode = editMode == .active ? .inactive : .active
+            }
+            
+            if let authManager = authManager {
+                NavigationLink {
+                    ProfileView(authManager: authManager)
+                } label: {
+                    Image(systemName: "person.circle")
+                }
+            }
+            
+            if !allTasks.isEmpty {
+                Button(action: { showingAddTask = true }) {
+                    Image(systemName: "plus")
+                        .fontWeight(.semibold)
+                }
+            }
+        }
+    }
+    
+    private func onViewAppear() {
+        if syncEngine == nil {
+            syncEngine = SyncEngine(modelContext: modelContext)
+        }
+        _Concurrency.Task {
+            await syncAll()
+            await loadCurrentUserProfile()
+        }
     }
     
     private var filterMenu: some View {
@@ -217,67 +231,127 @@ struct TaskListView: View {
     private var taskList: some View {
         List {
             ForEach(filteredTasks) { task in
-                TaskRowView(task: task, syncEngine: syncEngine, onShare: {
-                    taskToShare = task
-                })
-                    .contentShape(Rectangle())
-                    .onTapGesture { taskToEdit = task }
-                    .swipeActions(edge: .leading) {
-                        Button {
-                            withAnimation {
-                                task.isCompleted.toggle()
-                                task.completedAt = task.isCompleted ? Date() : nil
-                                task.updatedAt = Date()
-                                task.syncStatus = SyncStatus.pending.rawValue
-                            }
-                            _Concurrency.Task {
-                                await syncEngine?.pushTask(task)
-                            }
-                        } label: {
-                            Label(task.isCompleted ? "Undo" : "Complete",
-                                  systemImage: task.isCompleted ? "arrow.uturn.backward" : "checkmark")
-                        }
-                        .tint(task.isCompleted ? .orange : .green)
-                    }
-                    .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) {
-                            // Capture data BEFORE deleting
-                            let taskId = task.id
-                            let taskSyncStatus = task.syncStatus
-                            withAnimation {
-                                modelContext.delete(task)
-                            }
-                            _Concurrency.Task {
-                                await NotificationManager.shared.cancelNotification(taskId: taskId)
-                                await syncEngine?.deleteRemoteTask(id: taskId, syncStatus: taskSyncStatus)
-                            }
-                        } label: { Label("Delete", systemImage: "trash") }
-                    }
+                taskRow(for: task)
             }
-            .onMove { indices, newOffset in
-                var reordered = filteredTasks
-                reordered.move(fromOffsets: indices, toOffset: newOffset)
-                for (index, task) in reordered.enumerated() {
-                    task.sortOrder = index
-                    task.updatedAt = Date()
-                    task.syncStatus = SyncStatus.pending.rawValue
-                }
-                // Push reordered tasks to Supabase
-                let tasksToSync = reordered
-                _Concurrency.Task {
-                    for task in tasksToSync {
-                        await syncEngine?.pushTask(task)
-                    }
-                }
-            }
+            .onMove(perform: handleReorder)
         }
         .listStyle(.plain)
         .environment(\.editMode, $editMode)
     }
     
+    private func taskRow(for task: Task) -> some View {
+        let profile: UserProfile? = task.isShared ? syncEngine?.sharerProfiles[task.userId ?? ""] : nil
+        return TaskRowView(
+            task: task,
+            syncEngine: syncEngine,
+            onShare: { taskToShare = task },
+            currentUserProfile: currentUserProfile,
+            sharerProfile: profile
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { taskToEdit = task }
+        .swipeActions(edge: .leading) {
+            completeSwipeButton(for: task)
+        }
+        .swipeActions(edge: .trailing) {
+            deleteSwipeButton(for: task)
+        }
+    }
+    
+    private func completeSwipeButton(for task: Task) -> some View {
+        Button {
+            withAnimation {
+                task.isCompleted.toggle()
+                task.completedAt = task.isCompleted ? Date() : nil
+                task.updatedAt = Date()
+                task.syncStatus = SyncStatus.pending.rawValue
+            }
+            _Concurrency.Task {
+                await syncEngine?.pushTask(task)
+            }
+        } label: {
+            Label(task.isCompleted ? "Undo" : "Complete",
+                  systemImage: task.isCompleted ? "arrow.uturn.backward" : "checkmark")
+        }
+        .tint(task.isCompleted ? .orange : .green)
+    }
+    
+    private func deleteSwipeButton(for task: Task) -> some View {
+        Button(role: .destructive) {
+            let taskId = task.id
+            let taskSyncStatus = task.syncStatus
+            withAnimation {
+                modelContext.delete(task)
+            }
+            _Concurrency.Task {
+                await NotificationManager.shared.cancelNotification(taskId: taskId)
+                await syncEngine?.deleteRemoteTask(id: taskId, syncStatus: taskSyncStatus)
+            }
+        } label: {
+            Label("Delete", systemImage: "trash")
+        }
+    }
+    
+    private func handleReorder(indices: IndexSet, newOffset: Int) {
+        var reordered = filteredTasks
+        reordered.move(fromOffsets: indices, toOffset: newOffset)
+        for (index, task) in reordered.enumerated() {
+            task.sortOrder = index
+            task.updatedAt = Date()
+            task.syncStatus = SyncStatus.pending.rawValue
+        }
+        let tasksToSync = reordered
+        _Concurrency.Task {
+            for task in tasksToSync {
+                await syncEngine?.pushTask(task)
+            }
+        }
+    }
+    
     private func syncAll() async {
         guard let syncEngine = syncEngine else { return }
         await syncEngine.syncAll()
+    }
+    
+    private func loadCurrentUserProfile() async {
+        do {
+            let session = try await SupabaseConfig.client.auth.session
+            let userId = session.user.id.uuidString
+            
+            let profiles: [UserProfile] = try await SupabaseConfig.client
+                .from("user_profiles")
+                .select()
+                .eq("id", value: userId)
+                .execute()
+                .value
+            
+            currentUserProfile = profiles.first
+        } catch {
+            print("Error loading current user profile: \(error)")
+        }
+    }
+    
+    private func handlePendingTaskNavigation(_ taskId: UUID?) {
+        guard let taskId = taskId else { return }
+        
+        // Sync first to ensure the shared task is pulled
+        _Concurrency.Task {
+            await syncAll()
+            
+            // Find the task in local SwiftData
+            let descriptor = FetchDescriptor<Task>(
+                predicate: #Predicate<Task> { $0.id == taskId }
+            )
+            
+            if let task = try? modelContext.fetch(descriptor).first {
+                // Open the task
+                taskToEdit = task
+            }
+            
+            // Clear the pending navigation
+            PushNotificationManager.shared.pendingTaskNavigation = nil
+            pendingTaskId = nil
+        }
     }
 }
 

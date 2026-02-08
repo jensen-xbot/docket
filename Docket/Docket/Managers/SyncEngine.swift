@@ -11,6 +11,7 @@ class SyncEngine {
     var isSyncing = false
     var lastSyncDate: Date?
     var syncError: String?
+    var sharerProfiles: [String: UserProfile] = [:]
     private var didSubscribe = false
     
     init(modelContext: ModelContext) {
@@ -123,6 +124,10 @@ class SyncEngine {
             }
             
             try? modelContext.save()
+            
+            // Fetch sharer profiles for shared tasks
+            await fetchSharerProfiles(userId: userId)
+            
             lastSyncDate = Date()
         } catch {
             syncError = error.localizedDescription
@@ -130,11 +135,50 @@ class SyncEngine {
         }
     }
     
+    // Fetch profiles of users who shared tasks with current user
+    private func fetchSharerProfiles(userId: String) async {
+        do {
+            // Get unique owner IDs from shared tasks
+            let shares: [TaskShareRow] = try await supabase
+                .from("task_shares")
+                .select("owner_id, task_id")
+                .eq("shared_with_id", value: userId)
+                .eq("status", value: "accepted")
+                .execute()
+                .value
+            
+            let ownerIds = Array(Set(shares.map { $0.ownerId })) // Get unique owner IDs
+            
+            if ownerIds.isEmpty {
+                return
+            }
+            
+            // Fetch profiles for these owners
+            let profiles: [UserProfile] = try await supabase
+                .from("user_profiles")
+                .select()
+                .in("id", values: ownerIds.map { $0.uuidString })
+                .execute()
+                .value
+            
+            // Cache profiles by user ID
+            for profile in profiles {
+                sharerProfiles[profile.id.uuidString] = profile
+            }
+        } catch {
+            print("Error fetching sharer profiles: \(error)")
+        }
+    }
+    
     // Push a single task to Supabase
     func pushTask(_ task: Task) async {
         do {
             let session = try await supabase.auth.session
-            let userId = session.user.id.uuidString
+            let currentUserId = session.user.id.uuidString
+            
+            // For shared tasks, preserve the original owner's userId
+            // For owned tasks, use current user's ID
+            let userId = task.isShared && task.userId != nil ? task.userId! : currentUserId
             
             task.updatedAt = Date()
             let dto = TaskDTO(from: task, userId: userId)
@@ -379,12 +423,31 @@ class SyncEngine {
         didSubscribe = true
         // Placeholder for realtime subscriptions; keep sync polling for now.
     }
+    
+    // Remove a shared task from current user's list (deletes the share, not the task)
+    func removeSharedTask(taskId: UUID) async {
+        do {
+            let session = try await supabase.auth.session
+            let userId = session.user.id.uuidString
+            
+            try await supabase
+                .from("task_shares")
+                .delete()
+                .eq("task_id", value: taskId.uuidString)
+                .eq("shared_with_id", value: userId)
+                .execute()
+        } catch {
+            print("Error removing shared task: \(error)")
+        }
+    }
 }
 
 struct TaskShareRow: Codable {
     let taskId: UUID
+    let ownerId: UUID
     
     enum CodingKeys: String, CodingKey {
         case taskId = "task_id"
+        case ownerId = "owner_id"
     }
 }

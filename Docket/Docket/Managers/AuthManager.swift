@@ -108,6 +108,9 @@ class AuthManager {
             // Clear all local data before signing out
             clearLocalData(modelContext: modelContext)
             
+            // Delete device token so old user stops receiving notifications
+            await PushNotificationManager.shared.deleteDeviceToken()
+            
             try await supabase.auth.signOut()
             self.isAuthenticated = false
         } catch {

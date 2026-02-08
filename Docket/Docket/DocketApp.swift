@@ -1,9 +1,16 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 @main
 struct DocketApp: App {
+    @UIApplicationDelegateAdaptor(PushNotificationManager.self) var appDelegate
     @State private var authManager = AuthManager()
+    
+    init() {
+        // Register for push notifications on app launch
+        PushNotificationManager.shared.registerForPushNotifications()
+    }
     
     var body: some Scene {
         WindowGroup {

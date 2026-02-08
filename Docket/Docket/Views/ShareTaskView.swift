@@ -226,59 +226,30 @@ struct ShareTaskView: View {
             // Check if user exists in our system
             let userExists = await checkUserExists(email: recipientEmail)
             
-            let senderName: String
-            do {
-                let session = try await SupabaseConfig.client.auth.session
-                senderName = session.user.userMetadata["full_name"]
-                    .flatMap { if case let .string(n) = $0 { return n } else { return nil } }
-                    ?? session.user.email
-                    ?? "Someone"
-            } catch {
-                senderName = "Someone"
-            }
-            
             if viaText {
                 composeRecipient = phone ?? ""
                 if userExists {
-                    composeBody = "\(senderName) shared a task with you on Docket:\n\n\"\(task.title)\"\n\nOpen Docket to view it."
+                    composeBody = "I shared \"\(task.title)\" with you on Docket. Open the app to see it!"
                 } else {
-                    composeBody = "\(senderName) wants to share a task with you:\n\n\"\(task.title)\"\n\nDownload Docket to collaborate:\n\(appStoreURL)"
+                    composeBody = "I shared \"\(task.title)\" with you on Docket. Download it here: \(appStoreURL)"
                 }
                 isExistingUser = userExists
                 showTextCompose = true
             } else {
                 composeRecipient = recipientEmail
-                composeSubject = "\(senderName) shared a task with you"
+                composeSubject = "Task shared: \(task.title)"
                 if userExists {
-                    composeBody = """
-                    Hi,
-                    
-                    \(senderName) shared a task with you on Docket:
-                    
-                    "\(task.title)"
-                    
-                    Open the Docket app to view and collaborate on this task.
-                    
-                    — Sent from Docket
-                    """
+                    composeBody = "I shared \"\(task.title)\" with you on Docket. Open the app to see it!"
                 } else {
-                    composeBody = """
-                    Hi,
-                    
-                    \(senderName) wants to share a task with you:
-                    
-                    "\(task.title)"
-                    
-                    To view and collaborate, download Docket:
-                    \(appStoreURL)
-                    
-                    Once you sign up, the shared task will appear automatically.
-                    
-                    — Sent from Docket
-                    """
+                    composeBody = "I shared \"\(task.title)\" with you on Docket. Download it here: \(appStoreURL)"
                 }
                 isExistingUser = userExists
                 showMailCompose = true
+            }
+            
+            // Resolve contact_user_id if recipient is a Docket user
+            if userExists, let userId = await getUserIdForEmail(recipientEmail) {
+                await updateContactUserId(email: recipientEmail, userId: userId)
             }
         }
     }
@@ -300,6 +271,39 @@ struct ShareTaskView: View {
         } catch {
             // If profiles table doesn't exist or query fails, just return false
             return false
+        }
+    }
+    
+    private func getUserIdForEmail(_ email: String) async -> String? {
+        guard !email.isEmpty else { return nil }
+        do {
+            struct UserLookup: Codable { let id: UUID }
+            let result: [UserLookup] = try await SupabaseConfig.client
+                .from("user_profiles")
+                .select("id")
+                .eq("email", value: email.lowercased())
+                .limit(1)
+                .execute()
+                .value
+            return result.first?.id.uuidString
+        } catch {
+            return nil
+        }
+    }
+    
+    private func updateContactUserId(email: String, userId: String) async {
+        do {
+            let session = try await SupabaseConfig.client.auth.session
+            let currentUserId = session.user.id.uuidString
+            
+            try await SupabaseConfig.client
+                .from("contacts")
+                .update(["contact_user_id": userId])
+                .eq("user_id", value: currentUserId)
+                .eq("contact_email", value: email.lowercased())
+                .execute()
+        } catch {
+            // Ignore errors - contact might not exist yet
         }
     }
     
