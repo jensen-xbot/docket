@@ -22,45 +22,70 @@
 - [x] CategoryStore singleton for consistent state across views
 - [ ] Test on physical device (AWAITING USER)
 
-## v1.0: Cloud Sync Foundation (Priority #1)
+## v1.0: Cloud Sync Foundation - ✅ COMPLETE
 
 ### Phase 5: Cloud Infrastructure
-- [ ] Set up Supabase project
-- [ ] Create database schema (Tasks table)
-- [ ] Configure Row Level Security (RLS) policies
-- [ ] Implement Supabase Auth (email + Apple Sign In)
-- [ ] Create sync service (SwiftData ↔ Supabase)
-- [ ] Handle offline queue and conflict resolution
-- [ ] Add due dates with local notifications
-- [ ] Test sync across multiple devices
+- [x] Set up Supabase project
+- [x] Create database schema (Tasks table)
+- [x] Configure Row Level Security (RLS) policies
+- [x] Implement Supabase Auth (email + Apple Sign In)
+- [x] Create sync service (SwiftData ↔ Supabase)
+- [x] Handle offline queue and conflict resolution
+  - [x] NetworkMonitor (NWPathMonitor) for connectivity detection
+  - [x] Network guards on all push/pull methods (offline → .pending, not .failed)
+  - [x] Automatic retry with exponential backoff (2s, 8s, 30s) for failed items
+  - [x] Auto-flush pending queue on network reconnect
+  - [x] Conflict logging when remote overwrites local pending changes
+  - [x] Offline/pending UI indicators in TaskListView
+- [x] Add due dates with local notifications
+- [x] SyncEngine lifecycle refactor (single instance via environment, foreground sync)
+- [ ] Test sync across multiple devices (AWAITING USER)
 
-**Why first:** Foundation must be solid before building voice features on top.
+## v1.1: Conversational Voice-to-Task
 
-## v1.1: Voice-to-Task (Priority #2)
-
-### Phase 6: Voice Foundation
+### Phase 6: Speech Capture + TTS Foundation
 - [ ] Add Speech framework entitlement
-- [ ] Request microphone + speech permissions
-- [ ] Create SpeechRecognitionManager (Apple SpeechAnalyzer)
-- [ ] Set up AVAudioEngine for capture
-- [ ] Implement audio buffer management
-- [ ] Build continuous transcription display
-- [ ] Create Voice UI (mic button, overlay)
+- [ ] Add `NSMicrophoneUsageDescription` and `NSSpeechRecognitionUsageDescription` to Info.plist
+- [ ] Create SpeechRecognitionManager (SFSpeechRecognizer + AVAudioEngine)
+- [ ] Create TTSManager (AVSpeechSynthesizer with completion callback)
+- [ ] Implement AVAudioSession switching (`.playAndRecord` + `.defaultToSpeaker`)
+- [ ] Handle audio session interruptions (`AVAudioSession.interruptionNotification`)
+- [ ] Build VoiceRecordingView (mic button + conversation overlay)
+- [ ] Test on device: speak → transcription → TTS readback → mic restarts
 
-### Phase 7: Agent Integration
-- [ ] Supabase Edge Function for NLU (GPT-4o-mini)
-- [ ] Natural language → Task parsing
-- [ ] Build visual confirmation flow (NOT TTS)
-- [ ] Integrate voice-created tasks into synced model
+### Phase 7: Conversational AI Parsing
+- [ ] Set up OpenRouter account + API key
+- [ ] Supabase Edge Function `parse-voice-tasks` (conversational system prompt, gpt-4.1-mini)
+- [ ] Edge Function receives `messages[]` array (not single text)
+- [ ] Edge Function returns `{ type: "question"|"complete", ... }`
+- [ ] Build VoiceTaskParser (sends messages[], handles question/complete responses)
+- [ ] Build ParsedTask, ConversationMessage, ParseResponse models
+- [ ] Implement conversation loop on iOS (messages array + if/else on response type)
+- [ ] Test multi-turn: partial info → AI asks → user responds → task created
+- [ ] Test power-user: full utterance → instant task creation (no follow-ups)
 - [ ] English only for v1.1
 
-### Phase 8: Voice Polish
+### Phase 8: Confirmation UI + Sharing
+- [ ] Build TaskConfirmationView (notes + share target display, inline editing)
+- [ ] Wire up: conversation complete → preview card(s) → confirm → save to SwiftData
+- [ ] Share resolution flow (name → email via contacts cache or inline prompt)
+- [ ] Handle corrections mid-conversation ("actually make it Wednesday")
+- [ ] Voice confirmation: listen for "yes" / "add it" / "sounds good" after summary
+- [ ] Integrate voice-created tasks into synced model
+- [ ] TTS mute toggle in Settings
+
+### Phase 9: Voice Polish
+- [ ] Error handling (no speech, network down, AI failure, unknown share recipient)
+- [ ] Loading states and progress indicators (pulsing mic, "thinking" state)
+- [ ] Haptic feedback (start recording, task created, error)
+- [ ] Edge cases (empty input, very long dictation, conversation timeout)
 - [ ] Siri Shortcuts integration
 - [ ] Advanced parsing (recurring tasks, subtasks)
 - [ ] Optional: Whisper API fallback for accuracy
-- [ ] Optional: TTS confirmation responses (v1.2)
 
 **Why second:** Built on cloud foundation, uses same Supabase backend.
+**No new dependencies:** Apple Speech, AVFoundation, AVSpeechSynthesizer built into iOS. Edge Function uses native Deno fetch().
+**No orchestrator needed:** Conversation state is a messages array on iOS. Edge Function is stateless. No LangChain/LangGraph.
 
 ## Future / v2.0
 - [ ] Widgets
@@ -70,12 +95,20 @@
 
 ## Technical Decisions Made
 
-### Voice Architecture (v1.1)
-- **Transcription:** Apple SpeechAnalyzer (on-device, free, fast)
-- **Parsing:** GPT-4o-mini via Supabase Edge Function (~$5/month)
-- **Confirmation:** Visual only (not TTS agent)
+### Voice Architecture (v1.1) — Updated 2026-02-08
+- **Mode:** Conversational multi-turn (AI asks follow-ups when info is missing)
+- **Transcription:** Apple SFSpeechRecognizer (on-device, free, fast)
+- **Parsing:** gpt-4.1-mini via OpenRouter → Supabase Edge Function
+- **Conversation state:** messages[] array managed on iOS, Edge Function is stateless
+- **Extraction:** Title, due date, priority, category, notes, share target
+- **Confirmation:** TTS readback (AVSpeechSynthesizer, on-device) + visual preview
+- **Corrections:** Supported mid-conversation ("actually make it Wednesday")
+- **Sharing:** AI extracts share intent from speech, resolved via contacts cache
 - **Language:** English only for v1.1
-- **Cost estimate:** ~$5/month @ 100 users (vs $13 with Whisper)
+- **Model:** gpt-4.1-mini (fast, structured output, ~$0.001/turn) — NOT a thinking model
+- **Orchestrator:** Not needed — conversation loop is ~15 lines of Swift, no LangChain/LangGraph
+- **Dependencies:** Zero new installs (all Apple frameworks + Deno fetch)
+- **Cost estimate:** ~$8/month @ 100 users (avg 3 turns per task)
 
 ### Cloud Architecture (v1.0)
 - **Backend:** Supabase (PostgreSQL + Auth + Realtime)
@@ -92,6 +125,8 @@
 - See [VOICE-TO-TASK-PLAN.md](VOICE-TO-TASK-PLAN.md) for voice details
 
 ## Next Steps
-1. User tests MVP in Xcode
-2. Begin Phase 5.1: Supabase Setup (when ready)
-3. Complete cloud sync before starting voice work
+1. User tests on physical device
+2. Test sync across multiple devices
+3. Begin Phase 6: Voice Foundation (speech capture)
+4. Set up OpenRouter account + API key for Phase 7
+5. See [VOICE-TO-TASK-V2.md](VOICE-TO-TASK-V2.md) for full architecture

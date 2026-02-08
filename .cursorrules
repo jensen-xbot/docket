@@ -2,18 +2,31 @@
 
 ## Overview
 Simple, fast iPhone app for managing your daily tasks without the noise.
+Voice-to-task with conversational AI lets users create, categorize, annotate, and share tasks by speaking naturally.
+
+## Project Status
+- **MVP (Phases 1-4):** Complete — SwiftData, CRUD, categories, UI polish
+- **v1.0 (Phase 5):** Complete — Supabase cloud sync, auth, offline queue, sharing
+- **v1.1 (Phases 6-9):** In progress — Conversational voice-to-task
 
 ## Tech Stack
-- Frontend: SwiftUI
-- Backend: Supabase (v1.0)
-- Database: SwiftData (MVP) → PostgreSQL (v1.0)
-- Minimum iOS: 17+
+- **Frontend:** SwiftUI (iOS 17+)
+- **Backend:** Supabase (PostgreSQL + Auth + Edge Functions)
+- **Local persistence:** SwiftData
+- **Cloud sync:** Supabase bi-directional with offline queue
+- **Voice transcription:** Apple SFSpeechRecognizer (on-device, free)
+- **TTS readback:** AVSpeechSynthesizer (on-device, free)
+- **AI parsing:** gpt-4.1-mini via OpenRouter → Supabase Edge Function
+- **Audio capture:** AVAudioEngine + AVAudioSession
+- **No orchestrator:** Single-shot/conversational API calls — no LangChain/LangGraph
 
 ## Architecture Patterns
 - MVVM (Model-View-ViewModel) for SwiftUI
 - Repository pattern for data layer abstraction
 - SwiftData for local persistence
-- Supabase client for remote sync (v1.0)
+- Supabase client for remote sync
+- Conversational voice loop: listen → transcribe → AI parse → TTS readback → confirm
+- Edge Function as secure AI proxy (API keys never on client)
 
 ## Conventions
 - **Naming:** Swift style — PascalCase types, camelCase variables/functions
@@ -58,17 +71,72 @@ enum Priority: Int, CaseIterable {
     case medium = 1   // orange  
     case high = 2     // red
 }
+
+// Voice-to-task AI response (not persisted — intermediate struct)
+struct ParsedTask: Codable, Identifiable {
+    let id: UUID
+    var title: String
+    var dueDate: Date?
+    var priority: String   // "low", "medium", "high"
+    var category: String?
+    var notes: String?
+    var shareWith: String? // email or display name
+    var suggestion: String?
+}
+
+struct ConversationMessage: Codable {
+    let role: String       // "user" or "assistant"
+    let content: String
+}
+
+struct ParseResponse: Codable {
+    let type: String       // "question" or "complete"
+    let text: String?      // follow-up question (when type == "question")
+    let tasks: [ParsedTask]? // extracted tasks (when type == "complete")
+    let summary: String?   // TTS readback text (when type == "complete")
+}
 ```
 
 ## Key Files
+
+### Core
 - `DocketApp.swift` — App entry point with SwiftData container setup
 - `Models/Task.swift` — Task model with helper properties
 - `Views/TaskListView.swift` — Main task list with filtering
 - `Views/TaskRowView.swift` — Individual task cell
-- `Views/AddTaskView.swift` — Create/edit task sheet
+- `Views/AddTaskView.swift` — Create task sheet
+- `Views/EditTaskView.swift` — Edit existing task
 - `ViewModels/TaskListViewModel.swift` — Business logic
+
+### Cloud Sync (v1.0)
+- `Managers/SyncEngine.swift` — Bi-directional Supabase sync with offline queue
+- `Managers/NetworkMonitor.swift` — NWPathMonitor connectivity detection
+
+### Voice-to-Task (v1.1 — in progress)
+- `Managers/SpeechRecognitionManager.swift` — SFSpeechRecognizer + AVAudioEngine wrapper
+- `Managers/TTSManager.swift` — AVSpeechSynthesizer wrapper for TTS readback
+- `Managers/VoiceTaskParser.swift` — Calls Supabase Edge Function for AI parsing
+- `Views/VoiceRecordingView.swift` — Mic button + conversation overlay
+- `Views/TaskConfirmationView.swift` — Parsed task list with edit/confirm
+- `Models/ParsedTask.swift` — Lightweight struct for AI response
+
+### Utilities
 - `Utilities/Date+Extensions.swift` — Due date formatting and color logic
 - `Utilities/Color+Extensions.swift` — Priority/urgency color helpers
+
+## Voice-to-Task Guidelines (v1.1)
+- **Conversational AI:** The voice flow is a multi-turn conversation, not single-shot
+- **Audio session management:** Must switch between `.record` (mic) and `.playback` (TTS) cleanly
+  - Use `.playAndRecord` category with `.defaultToSpeaker` override when possible
+  - Handle `AVAudioSession.interruptionNotification` for phone calls, Siri, etc.
+  - After TTS finishes (`speechSynthesizer(_:didFinish:)`), re-activate mic
+- **Conversation state:** Managed client-side as a `[(role: String, content: String)]` messages array
+- **Edge Function:** Receives messages array, returns either a follow-up question or completed tasks
+- **TTS:** Uses AI-generated `summary` field for natural readback — not raw field values
+- **Share resolution:** `shareWith` name → contacts cache → email → `task_shares` table
+- **Permissions required:** Microphone (`NSMicrophoneUsageDescription`), Speech Recognition (`NSSpeechRecognitionUsageDescription`)
+- **No new dependencies:** Speech, AVFoundation, AVSpeechSynthesizer are all built into iOS
+- See [VOICE-TO-TASK-V2.md](VOICE-TO-TASK-V2.md) for full architecture
 
 ## Development Workflow
 - Build iteratively: Model → ViewModel → View → Preview → Test on device
@@ -105,9 +173,12 @@ This app is for Jon — a busy professional juggling sales work, side projects (
 ## Development Notes
 - iOS 17+ target (latest SwiftUI features like `@Observable` macro)
 - Dark mode from day 1 (SwiftUI handles this via `@Environment(\.colorScheme)`)
-- Focus on MVP first — local persistence only with SwiftData
-- v1.0 adds cloud sync via Supabase with data migration
-- PowerSync is an option if offline-first becomes critical before v1.0
+- MVP complete — local persistence with SwiftData
+- v1.0 complete — cloud sync via Supabase with offline queue + conflict resolution
+- v1.1 in progress — conversational voice-to-task with multi-turn dialogue (see VOICE-TO-TASK-V2.md)
+- AI model: gpt-4.1-mini via OpenRouter (fast, cheap, structured output)
+- No thinking models (o1/o3/R1) — task parsing is pattern extraction, not reasoning
+- No orchestrator (LangChain/LangGraph) — conversation loop is ~15 lines of Swift on the client
 
 ## Critical iOS Project Setup
 ⚠️ **MUST HAVE in project.pbxproj buildSettings:**
