@@ -71,7 +71,7 @@ struct AuthView: View {
                                 .foregroundStyle(.white)
                                 .cornerRadius(8)
                         }
-                        .disabled(email.isEmpty || !email.contains("@"))
+                        .disabled(!email.isValidEmail)
                     }
                 } else {
                     VStack(spacing: 8) {

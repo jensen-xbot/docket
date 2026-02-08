@@ -56,16 +56,55 @@ struct ProfileView: View {
                 profileHeaderContent
             }
             
-            // MARK: - Store Templates
-            Section("My Store Templates") {
+            // MARK: - My Stuff
+            Section("My Library") {
                 NavigationLink {
                     GroceryTemplateListView()
                 } label: {
-                    Label("Manage Store Lists", systemImage: "cart.fill")
+                    HStack(spacing: 12) {
+                        Image(systemName: "cart.fill")
+                            .font(.title3)
+                            .foregroundStyle(.blue)
+                            .frame(width: 32)
+                        Text("Manage Store Templates")
+                            .font(.body)
+                            .fontWeight(.medium)
+                        Spacer()
+                        Text("\(stores.count)")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color(.tertiarySystemFill))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                    .padding(.vertical, 4)
                 }
-                Text("\(stores.count) stores saved")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                
+                NavigationLink {
+                    ContactsListView()
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "person.2.fill")
+                            .font(.title3)
+                            .foregroundStyle(.blue)
+                            .frame(width: 32)
+                        Text("Manage Contacts")
+                            .font(.body)
+                            .fontWeight(.medium)
+                        Spacer()
+                        Text("\(contactCount)")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color(.tertiarySystemFill))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                    .padding(.vertical, 4)
+                }
             }
             
             // MARK: - Notifications
@@ -80,18 +119,6 @@ struct ProfileView: View {
                         Text("1 day before").tag(1440)
                     }
                 }
-            }
-            
-            // MARK: - Contacts
-            Section("My Contacts") {
-                NavigationLink {
-                    ContactsListView()
-                } label: {
-                    Label("Manage Contacts", systemImage: "person.2.fill")
-                }
-                Text("\(contactCount) contacts")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
             
             // MARK: - Sign Out
@@ -489,6 +516,14 @@ struct ProfileView: View {
     
     private func saveProfile() {
         guard let userId else { return }
+        
+        // Validate email if provided
+        let trimmedEmail = editEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedEmail.isEmpty && !trimmedEmail.isValidEmail {
+            statusMessage = "Error: Invalid email format"
+            return
+        }
+        
         isSaving = true
         statusMessage = nil
         
@@ -525,7 +560,7 @@ struct ProfileView: View {
                 let update = UserProfileUpsert(
                     id: userId,
                     displayName: editName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : editName.trimmingCharacters(in: .whitespacesAndNewlines),
-                    email: editEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : editEmail.trimmingCharacters(in: .whitespacesAndNewlines),
+                    email: trimmedEmail.isEmpty ? nil : trimmedEmail,
                     phone: editPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : editPhone.trimmingCharacters(in: .whitespacesAndNewlines),
                     countryIso: editCountryIso,
                     avatarUrl: editAvatarEmoji != nil ? nil : finalAvatarUrl,

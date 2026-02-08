@@ -21,8 +21,8 @@ class AuthManager {
     private func checkAuthState() {
         _Concurrency.Task {
             do {
-                _ = try await supabase.auth.session
-                self.isAuthenticated = true
+                let session = try await supabase.auth.session
+                self.isAuthenticated = !session.isExpired
             } catch {
                 self.isAuthenticated = false
             }
@@ -34,7 +34,11 @@ class AuthManager {
             for await (event, session) in supabase.auth.authStateChanges {
                 switch event {
                 case .initialSession:
-                    self.isAuthenticated = session != nil
+                    if let session, !session.isExpired {
+                        self.isAuthenticated = true
+                    } else {
+                        self.isAuthenticated = false
+                    }
                 case .signedIn:
                     self.isAuthenticated = true
                 case .signedOut:

@@ -210,16 +210,13 @@ struct AddTaskView: View {
                     syncEngine = SyncEngine(modelContext: modelContext)
                 }
             }
-            .alert("Save as Template?", isPresented: $showSaveTemplate) {
-                TextField("Template name", text: $templateName)
-                Button("Save") {
-                    saveTemplate()
-                }
-                Button("Cancel", role: .cancel) {
-                    templateName = ""
-                }
-            } message: {
-                Text("Save these \(checklistItems.count) items as a grocery template for next time?")
+            .sheet(isPresented: $showSaveTemplate) {
+                TemplateNameSheet(
+                    templateName: $templateName,
+                    itemCount: checklistItems.count,
+                    onSave: { saveTemplate() },
+                    onCancel: { templateName = "" }
+                )
             }
         }
     }
@@ -350,3 +347,48 @@ struct AddTaskView: View {
     AddTaskView()
         .modelContainer(for: [Task.self, GroceryStore.self], inMemory: true)
 }
+
+private struct TemplateNameSheet: View {
+    @Binding var templateName: String
+    let itemCount: Int
+    let onSave: () -> Void
+    let onCancel: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    private var isValid: Bool {
+        !templateName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Template name", text: $templateName)
+                }
+                Section {
+                    Text("Save these \(itemCount) items as a grocery template for next time?")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("Save Template")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        onCancel()
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        onSave()
+                        dismiss()
+                    }
+                    .disabled(!isValid)
+                }
+            }
+        }
+    }
+}
+

@@ -59,7 +59,6 @@ struct TaskListView: View {
     @State private var taskToEdit: Task?
     @State private var taskToShare: Task?
     @State private var syncEngine: SyncEngine?
-    @State private var editMode: EditMode = .inactive
     @State private var currentUserProfile: UserProfile?
     @State private var pendingTaskId: UUID?
     
@@ -130,10 +129,6 @@ struct TaskListView: View {
             if let syncEngine = syncEngine, syncEngine.isSyncing {
                 ProgressView()
                     .scaleEffect(0.8)
-            }
-            
-            Button(editMode == .active ? "Done" : "Reorder") {
-                editMode = editMode == .active ? .inactive : .active
             }
             
             if let authManager = authManager {
@@ -236,7 +231,6 @@ struct TaskListView: View {
             .onMove(perform: handleReorder)
         }
         .listStyle(.plain)
-        .environment(\.editMode, $editMode)
     }
     
     private func taskRow(for task: Task) -> some View {

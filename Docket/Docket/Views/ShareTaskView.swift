@@ -3,13 +3,6 @@ import MessageUI
 import Supabase
 import _Concurrency
 
-// MARK: - Share Method
-
-enum ShareMethod: String, CaseIterable {
-    case email = "Email"
-    case text = "Text"
-}
-
 // MARK: - ShareTaskView
 
 @MainActor
@@ -19,13 +12,8 @@ struct ShareTaskView: View {
     let task: Task
     
     @State private var contacts: [ContactRecord] = []
-    @State private var emailInput: String = ""
     @State private var isSharing = false
     @State private var statusMessage: String?
-    @State private var showAddContact = false
-    @State private var newName: String = ""
-    @State private var newEmail: String = ""
-    @State private var newPhone: String = ""
     
     // Share method selection
     @State private var selectedContact: ContactRecord? = nil
@@ -37,6 +25,7 @@ struct ShareTaskView: View {
     @State private var composeRecipient: String = ""
     @State private var composeSubject: String = ""
     @State private var composeBody: String = ""
+    @State private var composeEmail: String = "" // always the email, even when texting
     @State private var isExistingUser = false
     
     private let appStoreURL = "https://apps.apple.com/app/docket/id0000000000" // Replace with real ID
@@ -52,20 +41,23 @@ struct ShareTaskView: View {
                                 handleContactTap(contact)
                             } label: {
                                 HStack {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(contact.contactName ?? contact.contactEmail)
-                                            .font(.body)
-                                            .fontWeight(.medium)
-                                        Text(contact.contactEmail)
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
-                                        if let phone = contact.contactPhone, !phone.isEmpty {
-                                            Text(phone)
-                                                .font(.subheadline)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                    }
+                                    Text(contact.contactName ?? contact.contactEmail)
+                                        .font(.body)
+                                        .fontWeight(.medium)
+                                    
                                     Spacer()
+                                    
+                                    // Docket membership indicator
+                                    if contact.contactUserId != nil {
+                                        Image(systemName: "checklist")
+                                            .font(.caption)
+                                            .foregroundStyle(.blue)
+                                    } else {
+                                        Image(systemName: "person.circle")
+                                            .font(.caption)
+                                            .foregroundStyle(.gray)
+                                    }
+                                    
                                     Image(systemName: "paperplane.fill")
                                         .foregroundStyle(.blue)
                                 }
@@ -75,60 +67,27 @@ struct ShareTaskView: View {
                     }
                 }
                 
-                // Or type an email/phone directly
-                Section("Share by Email or Phone") {
-                    HStack(spacing: 8) {
-                        TextField("Email or phone", text: $emailInput)
-                            .font(.body)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .keyboardType(.emailAddress)
-                        Button("Send") {
-                            handleManualShare()
-                        }
-                        .disabled(emailInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSharing)
-                    }
-                }
-                
-                // Add new contact inline
+                // Manage contacts link
                 Section {
-                    if showAddContact {
-                        VStack(spacing: 8) {
-                            TextField("Name", text: $newName)
-                                .font(.body)
-                                .textInputAutocapitalization(.words)
-                            TextField("Email", text: $newEmail)
-                                .font(.body)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                                .keyboardType(.emailAddress)
-                            TextField("Phone (optional)", text: $newPhone)
-                                .font(.body)
-                                .keyboardType(.phonePad)
-                            HStack {
-                                Button("Save Contact") {
-                                    addContact()
-                                }
-                                .disabled(newEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                                
-                                Spacer()
-                                
-                                Button("Cancel") {
-                                    showAddContact = false
-                                    newName = ""
-                                    newEmail = ""
-                                    newPhone = ""
-                                }
-                                .foregroundStyle(.secondary)
+                    NavigationLink {
+                        ContactsListView()
+                            .onDisappear { loadContacts() }
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "person.2.fill")
+                                .font(.title3)
+                                .foregroundStyle(.blue)
+                                .frame(width: 32)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Manage Contacts")
+                                    .font(.body)
+                                    .fontWeight(.medium)
+                                Text("Import, add, or edit contacts")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
                         }
-                    } else {
-                        Button {
-                            showAddContact = true
-                        } label: {
-                            Label("Add New Contact", systemImage: "plus.circle")
-                                .font(.body)
-                        }
+                        .padding(.vertical, 4)
                     }
                 }
                 
@@ -148,17 +107,29 @@ struct ShareTaskView: View {
                 }
             }
             .onAppear { loadContacts() }
-            .confirmationDialog("How would you like to share?", isPresented: $showMethodPicker, titleVisibility: .visible) {
+            .sheet(isPresented: $showMethodPicker) {
                 if let contact = selectedContact {
-                    Button("Email (\(contact.contactEmail))") {
-                        prepareAndShare(email: contact.contactEmail, viaText: false)
-                    }
-                    if let phone = contact.contactPhone, !phone.isEmpty {
-                        Button("Text Message (\(phone))") {
-                            prepareAndShare(phone: phone, viaText: true)
+                    ShareMethodSheet(
+                        contact: contact,
+                        onEmail: {
+                            showMethodPicker = false
+                            prepareAndShare(email: contact.contactEmail, viaText: false)
+                        },
+                        onText: {
+                            showMethodPicker = false
+                            prepareAndShare(phone: contact.contactPhone, viaText: true)
+                        },
+                        onDocket: {
+                            showMethodPicker = false
+                            shareViaDocket(contact: contact)
+                        },
+                        onCancel: {
+                            showMethodPicker = false
+                            selectedContact = nil
                         }
-                    }
-                    Button("Cancel", role: .cancel) { selectedContact = nil }
+                    )
+                    .presentationDetents([.height(280)])
+                    .presentationDragIndicator(.visible)
                 }
             }
             .sheet(isPresented: $showMailCompose) {
@@ -179,8 +150,11 @@ struct ShareTaskView: View {
                     body: composeBody
                 ) { result in
                     if case .sent = result {
-                        recordShare(to: composeRecipient)
-                        statusMessage = "Text sent to \(composeRecipient)."
+                        // Use the email for the share record, not the phone number
+                        if !composeEmail.isEmpty {
+                            recordShare(to: composeEmail)
+                        }
+                        statusMessage = "Text sent."
                     }
                 }
             }
@@ -191,25 +165,8 @@ struct ShareTaskView: View {
     // MARK: - Contact tap → pick method
     
     private func handleContactTap(_ contact: ContactRecord) {
-        let hasPhone = !(contact.contactPhone ?? "").isEmpty
-        if hasPhone {
-            selectedContact = contact
-            showMethodPicker = true
-        } else {
-            // Only email available
-            prepareAndShare(email: contact.contactEmail, viaText: false)
-        }
-    }
-    
-    private func handleManualShare() {
-        let input = emailInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !input.isEmpty else { return }
-        
-        if input.contains("@") {
-            prepareAndShare(email: input, viaText: false)
-        } else {
-            prepareAndShare(phone: input, viaText: true)
-        }
+        selectedContact = contact
+        showMethodPicker = true
     }
     
     // MARK: - Prepare share content
@@ -221,13 +178,26 @@ struct ShareTaskView: View {
         _Concurrency.Task {
             defer { isSharing = false }
             
-            let recipientEmail = email ?? ""
+            // Resolve the email: use passed email, or look up from selectedContact
+            let recipientEmail: String
+            if let email, !email.isEmpty {
+                recipientEmail = email
+            } else if let contact = selectedContact {
+                recipientEmail = contact.contactEmail
+            } else {
+                recipientEmail = ""
+            }
+            
+            // Always store the email for share records
+            composeEmail = recipientEmail
             
             // Check if user exists in our system
             let userExists = await checkUserExists(email: recipientEmail)
             
             if viaText {
-                composeRecipient = phone ?? ""
+                // Strip phone number to digits only (and optional leading +)
+                let cleanedPhone = stripPhoneNumber(phone ?? "")
+                composeRecipient = cleanedPhone
                 if userExists {
                     composeBody = "I shared \"\(task.title)\" with you on Docket. Open the app to see it!"
                 } else {
@@ -252,6 +222,54 @@ struct ShareTaskView: View {
                 await updateContactUserId(email: recipientEmail, userId: userId)
             }
         }
+    }
+    
+    // MARK: - Share via Docket
+    
+    private func shareViaDocket(contact: ContactRecord) {
+        guard contact.contactUserId != nil else { return }
+        
+        isSharing = true
+        statusMessage = nil
+        
+        _Concurrency.Task {
+            defer { isSharing = false }
+            
+            do {
+                let session = try await SupabaseConfig.client.auth.session
+                let ownerId = session.user.id.uuidString
+                
+                let shareInsert = TaskShareInsert(
+                    taskId: task.id,
+                    ownerId: ownerId,
+                    sharedWithEmail: contact.contactEmail,
+                    status: "pending"
+                )
+                
+                try await SupabaseConfig.client
+                    .from("task_shares")
+                    .insert(shareInsert)
+                    .execute()
+                
+                let contactName = contact.contactName ?? contact.contactEmail
+                statusMessage = "Shared with \(contactName) on Docket."
+                selectedContact = nil
+            } catch {
+                statusMessage = "Couldn't share via Docket. Please try again."
+            }
+        }
+    }
+    
+    // MARK: - Phone number formatting
+    
+    private func stripPhoneNumber(_ phone: String) -> String {
+        // Keep only digits and optional leading +
+        let cleaned = phone.filter { $0.isNumber || $0 == "+" }
+        // Ensure + is only at the start
+        if cleaned.hasPrefix("+") {
+            return "+" + cleaned.dropFirst().filter { $0.isNumber }
+        }
+        return cleaned.filter { $0.isNumber }
     }
     
     // MARK: - Check if user exists
@@ -302,6 +320,9 @@ struct ShareTaskView: View {
                 .eq("user_id", value: currentUserId)
                 .eq("contact_email", value: email.lowercased())
                 .execute()
+            
+            // Reload contacts to update UI
+            loadContacts()
         } catch {
             // Ignore errors - contact might not exist yet
         }
@@ -348,42 +369,18 @@ struct ShareTaskView: View {
                     .order("created_at", ascending: false)
                     .execute()
                     .value
+                
                 contacts = response
+                
+                // Lazy resolve membership for contacts without contact_user_id
+                for contact in contacts where contact.contactUserId == nil {
+                    if await checkUserExists(email: contact.contactEmail),
+                       let userId = await getUserIdForEmail(contact.contactEmail) {
+                        await updateContactUserId(email: contact.contactEmail, userId: userId)
+                    }
+                }
             } catch {
                 contacts = []
-            }
-        }
-    }
-    
-    private func addContact() {
-        let email = newEmail.trimmingCharacters(in: .whitespacesAndNewlines)
-        let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let phone = newPhone.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !email.isEmpty else { return }
-        
-        _Concurrency.Task {
-            do {
-                let session = try await SupabaseConfig.client.auth.session
-                let userId = session.user.id.uuidString
-                let insert = ContactInsert(
-                    userId: userId,
-                    contactEmail: email,
-                    contactName: name.isEmpty ? nil : name,
-                    contactPhone: phone.isEmpty ? nil : phone
-                )
-                try await SupabaseConfig.client
-                    .from("contacts")
-                    .insert(insert)
-                    .execute()
-                
-                newName = ""
-                newEmail = ""
-                newPhone = ""
-                showAddContact = false
-                statusMessage = "Contact saved."
-                loadContacts()
-            } catch {
-                statusMessage = "Couldn't save contact."
             }
         }
     }
@@ -454,6 +451,7 @@ struct TextComposeView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> MFMessageComposeViewController {
         let vc = MFMessageComposeViewController()
         vc.messageComposeDelegate = context.coordinator
+        // recipient is already cleaned (digits only)
         vc.recipients = [recipient]
         vc.body = body
         return vc
@@ -484,12 +482,14 @@ struct ContactRecord: Codable, Identifiable {
     let contactEmail: String
     let contactName: String?
     let contactPhone: String?
+    let contactUserId: UUID?
     
     enum CodingKeys: String, CodingKey {
         case id
         case contactEmail = "contact_email"
         case contactName = "contact_name"
         case contactPhone = "contact_phone"
+        case contactUserId = "contact_user_id"
     }
 }
 
@@ -504,6 +504,110 @@ struct TaskShareInsert: Encodable {
         case ownerId = "owner_id"
         case sharedWithEmail = "shared_with_email"
         case status
+    }
+}
+
+// MARK: - Share Method Sheet (replaces confirmationDialog to avoid constraint warnings)
+
+private struct ShareMethodSheet: View {
+    let contact: ContactRecord
+    let onEmail: () -> Void
+    let onText: () -> Void
+    let onDocket: () -> Void
+    let onCancel: () -> Void
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Contact name header
+                Text(contact.contactName ?? contact.contactEmail)
+                    .font(.headline)
+                    .padding(.top, 16)
+                    .padding(.bottom, 20)
+                
+                VStack(spacing: 12) {
+                    // Email option
+                    Button {
+                        onEmail()
+                    } label: {
+                        HStack {
+                            Image(systemName: "envelope.fill")
+                                .frame(width: 24)
+                            Text("Email")
+                            Spacer()
+                            Text(contact.contactEmail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(Color(.secondarySystemGroupedBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
+                    .buttonStyle(.plain)
+                    
+                    // Text option (only if phone exists)
+                    if let phone = contact.contactPhone, !phone.isEmpty {
+                        Button {
+                            onText()
+                        } label: {
+                            HStack {
+                                Image(systemName: "message.fill")
+                                    .frame(width: 24)
+                                Text("Text Message")
+                                Spacer()
+                                Text(phone)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(Color(.secondarySystemGroupedBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    
+                    // Share via Docket (always visible, greyed if not a member)
+                    let isMember = contact.contactUserId != nil
+                    Button {
+                        if isMember { onDocket() }
+                    } label: {
+                        HStack {
+                            Image(systemName: "checklist")
+                                .frame(width: 24)
+                            Text("Share via Docket")
+                            Spacer()
+                            if !isMember {
+                                Text("Not a member")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(Color(.secondarySystemGroupedBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .foregroundStyle(isMember ? .blue : .gray.opacity(0.5))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!isMember)
+                }
+                .padding(.horizontal, 16)
+                
+                Spacer()
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("Share via")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { onCancel() }
+                }
+            }
+        }
     }
 }
 

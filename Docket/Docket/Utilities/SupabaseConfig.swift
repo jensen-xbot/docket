@@ -11,6 +11,11 @@ enum SupabaseConfig {
         guard let url = URL(string: urlString) else {
             fatalError("Invalid Supabase URL")
         }
-        return SupabaseClient(supabaseURL: url, supabaseKey: anonKey)
+        let options = SupabaseClientOptions(
+            auth: SupabaseClientOptions.AuthOptions(
+                emitLocalSessionAsInitialSession: true
+            )
+        )
+        return SupabaseClient(supabaseURL: url, supabaseKey: anonKey, options: options)
     }()
 }
