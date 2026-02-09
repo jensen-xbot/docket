@@ -19,7 +19,7 @@ struct AddTaskView: View {
     @State private var selectedStore: String = ""
     @State private var showStorePicker: Bool = false
     @State private var loadedTemplateName: String? = nil
-    @State private var syncEngine: SyncEngine? = nil
+    @Environment(SyncEngine.self) private var syncEngine
     
     // Save template prompt
     @State private var showSaveTemplate = false
@@ -206,9 +206,6 @@ struct AddTaskView: View {
             }
             .onAppear {
                 titleFocused = true
-                if syncEngine == nil {
-                    syncEngine = SyncEngine(modelContext: modelContext)
-                }
             }
             .sheet(isPresented: $showSaveTemplate) {
                 TemplateNameSheet(
@@ -260,7 +257,7 @@ struct AddTaskView: View {
         modelContext.insert(task)
         _Concurrency.Task {
             await NotificationManager.shared.scheduleNotification(for: task)
-            await syncEngine?.pushTask(task)
+            await syncEngine.pushTask(task)
         }
         dismiss()
     }
@@ -281,7 +278,7 @@ struct AddTaskView: View {
             store = created
         }
         _Concurrency.Task {
-            await syncEngine?.pushGroceryStore(store)
+            await syncEngine.pushGroceryStore(store)
         }
     }
     
@@ -294,7 +291,7 @@ struct AddTaskView: View {
             existing.updatedAt = Date()
             existing.syncStatus = SyncStatus.pending.rawValue
             _Concurrency.Task {
-                await syncEngine?.pushGroceryStore(existing)
+                await syncEngine.pushGroceryStore(existing)
             }
         }
     }

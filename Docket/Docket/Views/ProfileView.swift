@@ -43,6 +43,10 @@ struct ProfileView: View {
     @AppStorage("notifications.remindersEnabled") private var remindersEnabled = true
     @AppStorage("notifications.shareAlertsEnabled") private var shareAlertsEnabled = true
     @AppStorage("notifications.defaultReminderMinutes") private var defaultReminderMinutes = 0
+    @AppStorage("ttsMuted") private var ttsMuted = false
+    @AppStorage("useWhisperTranscription") private var useWhisperTranscription = false
+    @AppStorage("useOpenAITTS") private var useOpenAITTS = true
+    @AppStorage("openAITTSVoice") private var openAITTSVoice = "nova"
     
     init(authManager: AuthManager) {
         self.authManager = authManager
@@ -118,6 +122,37 @@ struct ProfileView: View {
                         Text("1 hour before").tag(60)
                         Text("1 day before").tag(1440)
                     }
+                }
+            }
+            
+            // MARK: - Voice Settings
+            Section("Voice") {
+                Toggle("Read responses aloud", isOn: Binding(
+                    get: { !ttsMuted },
+                    set: { ttsMuted = !$0 }
+                ))
+                
+                Toggle("Natural voice", isOn: $useOpenAITTS)
+                if useOpenAITTS {
+                    Text("Uses cloud processing for natural-sounding responses")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    
+                    Picker("Voice", selection: $openAITTSVoice) {
+                        Text("Nova").tag("nova")
+                        Text("Alloy").tag("alloy")
+                        Text("Echo").tag("echo")
+                        Text("Fable").tag("fable")
+                        Text("Onyx").tag("onyx")
+                        Text("Shimmer").tag("shimmer")
+                    }
+                }
+                
+                Toggle("Enhanced transcription", isOn: $useWhisperTranscription)
+                if useWhisperTranscription {
+                    Text("Better accuracy for accents (uses cloud processing)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
             

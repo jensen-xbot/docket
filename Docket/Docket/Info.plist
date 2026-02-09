@@ -17,5 +17,9 @@
 	</array>
 	<key>NSContactsUsageDescription</key>
 	<string>Docket uses your contacts to quickly share tasks with friends and family.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Docket uses the microphone to capture voice input for creating tasks.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Docket uses speech recognition to transcribe your voice into tasks.</string>
 </dict>
 </plist>

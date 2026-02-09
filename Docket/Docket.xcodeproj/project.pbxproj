@@ -43,6 +43,13 @@
 		8E9C0F1B2A3B4C5D6E7F0131 /* SharedAvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0231 /* SharedAvatarView.swift */; };
 		8E9C0F1B2A3B4C5D6E7F0132 /* String+Validation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0232 /* String+Validation.swift */; };
 		8E9C0F1B2A3B4C5D6E7F0133 /* CategoryIconColorPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0233 /* CategoryIconColorPicker.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0134 /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0234 /* NetworkMonitor.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0135 /* ParsedTask.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0235 /* ParsedTask.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0136 /* SpeechRecognitionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0236 /* SpeechRecognitionManager.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0137 /* TTSManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0237 /* TTSManager.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0138 /* VoiceRecordingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0238 /* VoiceRecordingView.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0139 /* TaskConfirmationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0239 /* TaskConfirmationView.swift */; };
+		8E9C0F1B2A3B4C5D6E7F013A /* VoiceTaskParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F023A /* VoiceTaskParser.swift */; };
 		AD6606E62F36F09B004CEBFE /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = AD6606E52F36F09B004CEBFE /* Supabase */; };
 		AD6606E92F37934E004CEBFE /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = AD6606E82F37934E004CEBFE /* AppIcon.icon */; };
 /* End PBXBuildFile section */
@@ -86,6 +93,13 @@
 		8E9C0F1B2A3B4C5D6E7F0231 /* SharedAvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedAvatarView.swift; sourceTree = "<group>"; };
 		8E9C0F1B2A3B4C5D6E7F0232 /* String+Validation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Validation.swift"; sourceTree = "<group>"; };
 		8E9C0F1B2A3B4C5D6E7F0233 /* CategoryIconColorPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryIconColorPicker.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F0234 /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F0235 /* ParsedTask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParsedTask.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F0236 /* SpeechRecognitionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechRecognitionManager.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F0237 /* TTSManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSManager.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F0238 /* VoiceRecordingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceRecordingView.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F0239 /* TaskConfirmationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskConfirmationView.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F023A /* VoiceTaskParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceTaskParser.swift; sourceTree = "<group>"; };
 		AD6606E72F36F4F0004CEBFE /* Docket.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Docket.entitlements; sourceTree = "<group>"; };
 		AD6606E82F37934E004CEBFE /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -144,6 +158,7 @@
 				8E9C0F1B2A3B4C5D6E7F0224 /* IngredientLibrary.swift */,
 				8E9C0F1B2A3B4C5D6E7F0220 /* ContactInsert.swift */,
 				8E9C0F1B2A3B4C5D6E7F0221 /* UserProfile.swift */,
+				8E9C0F1B2A3B4C5D6E7F0235 /* ParsedTask.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -168,6 +183,8 @@
 				8E9C0F1B2A3B4C5D6E7F0223 /* EmojiPickerView.swift */,
 				8E9C0F1B2A3B4C5D6E7F0226 /* StorePickerView.swift */,
 				8E9C0F1B2A3B4C5D6E7F0231 /* SharedAvatarView.swift */,
+				8E9C0F1B2A3B4C5D6E7F0238 /* VoiceRecordingView.swift */,
+				8E9C0F1B2A3B4C5D6E7F0239 /* TaskConfirmationView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -201,6 +218,10 @@
 				8E9C0F1B2A3B4C5D6E7F0219 /* NotificationManager.swift */,
 				8E9C0F1B2A3B4C5D6E7F0225 /* StoreStore.swift */,
 				8E9C0F1B2A3B4C5D6E7F0230 /* PushNotificationManager.swift */,
+				8E9C0F1B2A3B4C5D6E7F0234 /* NetworkMonitor.swift */,
+				8E9C0F1B2A3B4C5D6E7F0236 /* SpeechRecognitionManager.swift */,
+				8E9C0F1B2A3B4C5D6E7F0237 /* TTSManager.swift */,
+				8E9C0F1B2A3B4C5D6E7F023A /* VoiceTaskParser.swift */,
 			);
 			path = Managers;
 			sourceTree = "<group>";
@@ -293,6 +314,7 @@
 				8E9C0F1B2A3B4C5D6E7F0113 /* AuthManager.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0114 /* SyncEngine.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0130 /* PushNotificationManager.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0134 /* NetworkMonitor.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0103 /* Color+Extensions.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0104 /* Date+Extensions.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0132 /* String+Validation.swift in Sources */,
@@ -320,6 +342,12 @@
 				8E9C0F1B2A3B4C5D6E7F012D /* IngredientLibrary.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F012E /* StoreStore.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F012F /* StorePickerView.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0135 /* ParsedTask.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0136 /* SpeechRecognitionManager.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0137 /* TTSManager.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0138 /* VoiceRecordingView.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0139 /* TaskConfirmationView.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F013A /* VoiceTaskParser.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

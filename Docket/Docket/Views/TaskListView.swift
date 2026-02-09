@@ -50,15 +50,17 @@ class TaskListViewModel {
 
 struct TaskListView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(NetworkMonitor.self) private var networkMonitor
+    @Environment(SyncEngine.self) private var syncEngine
     @Query(sort: \Task.createdAt, order: .reverse) private var allTasks: [Task]
     
     var authManager: AuthManager?
     
     @State private var viewModel = TaskListViewModel()
     @State private var showingAddTask = false
+    @State private var showingVoiceRecording = false
     @State private var taskToEdit: Task?
     @State private var taskToShare: Task?
-    @State private var syncEngine: SyncEngine?
     @State private var currentUserProfile: UserProfile?
     @State private var pendingTaskId: UUID?
     
@@ -91,10 +93,58 @@ struct TaskListView: View {
                     }
                 }
                 .fullScreenCover(isPresented: $showingAddTask) { AddTaskView() }
+                .fullScreenCover(isPresented: $showingVoiceRecording) { VoiceRecordingView() }
                 .fullScreenCover(item: $taskToEdit) { task in EditTaskView(task: task) }
                 .sheet(item: $taskToShare) { task in ShareTaskView(task: task) }
+                .safeAreaInset(edge: .bottom) {
+                    if !networkMonitor.isConnected || pendingCount > 0 {
+                        offlinePendingBanner
+                    }
+                }
         }
         .searchable(text: $viewModel.searchText, prompt: "Search tasks")
+    }
+    
+    private var pendingCount: Int {
+        let syncedValue = SyncStatus.synced.rawValue
+        return allTasks.filter { $0.syncStatus != syncedValue }.count
+    }
+    
+    @ViewBuilder
+    private var offlinePendingBanner: some View {
+        VStack(spacing: 0) {
+            if !networkMonitor.isConnected {
+                HStack(spacing: 8) {
+                    Image(systemName: "wifi.slash")
+                        .font(.caption)
+                    Text("Offline")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.red)
+                .cornerRadius(8)
+            }
+            
+            if pendingCount > 0 && networkMonitor.isConnected {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.caption)
+                    Text("\(pendingCount) change\(pendingCount == 1 ? "" : "s") pending")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.orange)
+                .cornerRadius(8)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.bottom, 8)
     }
     
     @ViewBuilder
@@ -126,7 +176,7 @@ struct TaskListView: View {
     
     private var trailingToolbar: some View {
         HStack(spacing: 12) {
-            if let syncEngine = syncEngine, syncEngine.isSyncing {
+            if syncEngine.isSyncing {
                 ProgressView()
                     .scaleEffect(0.8)
             }
@@ -139,6 +189,11 @@ struct TaskListView: View {
                 }
             }
             
+            Button(action: { showingVoiceRecording = true }) {
+                Image(systemName: "mic.fill")
+                    .fontWeight(.semibold)
+            }
+            
             if !allTasks.isEmpty {
                 Button(action: { showingAddTask = true }) {
                     Image(systemName: "plus")
@@ -149,9 +204,6 @@ struct TaskListView: View {
     }
     
     private func onViewAppear() {
-        if syncEngine == nil {
-            syncEngine = SyncEngine(modelContext: modelContext)
-        }
         _Concurrency.Task {
             await syncAll()
             await loadCurrentUserProfile()
@@ -234,7 +286,7 @@ struct TaskListView: View {
     }
     
     private func taskRow(for task: Task) -> some View {
-        let profile: UserProfile? = task.isShared ? syncEngine?.sharerProfiles[task.userId ?? ""] : nil
+        let profile: UserProfile? = task.isShared ? syncEngine.sharerProfiles[task.userId ?? ""] : nil
         return TaskRowView(
             task: task,
             syncEngine: syncEngine,
@@ -261,7 +313,7 @@ struct TaskListView: View {
                 task.syncStatus = SyncStatus.pending.rawValue
             }
             _Concurrency.Task {
-                await syncEngine?.pushTask(task)
+                await syncEngine.pushTask(task)
             }
         } label: {
             Label(task.isCompleted ? "Undo" : "Complete",
@@ -279,7 +331,7 @@ struct TaskListView: View {
             }
             _Concurrency.Task {
                 await NotificationManager.shared.cancelNotification(taskId: taskId)
-                await syncEngine?.deleteRemoteTask(id: taskId, syncStatus: taskSyncStatus)
+                await syncEngine.deleteRemoteTask(id: taskId, syncStatus: taskSyncStatus)
             }
         } label: {
             Label("Delete", systemImage: "trash")
@@ -297,13 +349,12 @@ struct TaskListView: View {
         let tasksToSync = reordered
         _Concurrency.Task {
             for task in tasksToSync {
-                await syncEngine?.pushTask(task)
+                await syncEngine.pushTask(task)
             }
         }
     }
     
     private func syncAll() async {
-        guard let syncEngine = syncEngine else { return }
         await syncEngine.syncAll()
     }
     

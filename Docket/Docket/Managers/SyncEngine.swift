@@ -1,12 +1,14 @@
 import Foundation
 import Supabase
 import SwiftData
+import _Concurrency
 
 @MainActor
 @Observable
 class SyncEngine {
     private let supabase = SupabaseConfig.client
     private let modelContext: ModelContext
+    private let networkMonitor: NetworkMonitor?
     
     var isSyncing = false
     var lastSyncDate: Date?
@@ -14,12 +16,23 @@ class SyncEngine {
     var sharerProfiles: [String: UserProfile] = [:]
     private var didSubscribe = false
     
-    init(modelContext: ModelContext) {
+    init(modelContext: ModelContext, networkMonitor: NetworkMonitor? = nil) {
         self.modelContext = modelContext
+        self.networkMonitor = networkMonitor
+    }
+    
+    // Check if network is available before sync operations
+    private var isNetworkAvailable: Bool {
+        networkMonitor?.isConnected ?? true // Default to true if no monitor
     }
     
     // Pull remote tasks and merge with local
     func pullTasks() async {
+        guard isNetworkAvailable else {
+            print("Skipping pullTasks: network unavailable")
+            return
+        }
+        
         isSyncing = true
         syncError = nil
         defer { isSyncing = false }
@@ -72,6 +85,10 @@ class SyncEngine {
             for dto in ownedResponse {
                 if let existing = localTasks?.first(where: { $0.id == dto.id }) {
                     if dto.updatedAt > existing.updatedAt {
+                        // Conflict detection: if local has pending changes, log a warning
+                        if existing.syncStatus == SyncStatus.pending.rawValue {
+                            print("⚠️ Conflict detected: Local pending changes for task '\(existing.title)' overwritten by remote (remote updatedAt: \(dto.updatedAt), local updatedAt: \(existing.updatedAt))")
+                        }
                         existing.title = dto.title
                         existing.isCompleted = dto.isCompleted
                         existing.dueDate = dto.dueDate
@@ -86,6 +103,11 @@ class SyncEngine {
                         existing.isShared = false
                         existing.updatedAt = dto.updatedAt
                         existing.syncStatus = SyncStatus.synced.rawValue
+                    } else {
+                        // Local is newer or same, but ensure sync status is correct
+                        if existing.syncStatus == SyncStatus.synced.rawValue {
+                            // Already synced, no action needed
+                        }
                     }
                 } else {
                     let task = dto.toTask()
@@ -98,6 +120,10 @@ class SyncEngine {
             for dto in sharedResponse {
                 if let existing = localTasks?.first(where: { $0.id == dto.id }) {
                     if dto.updatedAt > existing.updatedAt {
+                        // Conflict detection: if local has pending changes, log a warning
+                        if existing.syncStatus == SyncStatus.pending.rawValue {
+                            print("⚠️ Conflict detected: Local pending changes for shared task '\(existing.title)' overwritten by remote (remote updatedAt: \(dto.updatedAt), local updatedAt: \(existing.updatedAt))")
+                        }
                         existing.title = dto.title
                         existing.isCompleted = dto.isCompleted
                         existing.dueDate = dto.dueDate
@@ -172,6 +198,13 @@ class SyncEngine {
     
     // Push a single task to Supabase
     func pushTask(_ task: Task) async {
+        guard isNetworkAvailable else {
+            // If offline, leave as pending (don't mark as failed)
+            task.syncStatus = SyncStatus.pending.rawValue
+            try? modelContext.save()
+            return
+        }
+        
         do {
             let session = try await supabase.auth.session
             let currentUserId = session.user.id.uuidString
@@ -235,6 +268,11 @@ class SyncEngine {
     
     // Pull remote grocery stores and merge with local
     func pullGroceryStores() async {
+        guard isNetworkAvailable else {
+            print("Skipping pullGroceryStores: network unavailable")
+            return
+        }
+        
         do {
             let session = try await supabase.auth.session
             let userId = session.user.id.uuidString
@@ -273,6 +311,13 @@ class SyncEngine {
     
     // Push a single grocery store to Supabase
     func pushGroceryStore(_ store: GroceryStore) async {
+        guard isNetworkAvailable else {
+            // If offline, leave as pending (don't mark as failed)
+            store.syncStatus = SyncStatus.pending.rawValue
+            try? modelContext.save()
+            return
+        }
+        
         do {
             let session = try await supabase.auth.session
             let userId = session.user.id.uuidString
@@ -330,6 +375,11 @@ class SyncEngine {
     
     // Pull remote ingredients and merge with local
     func pullIngredients() async {
+        guard isNetworkAvailable else {
+            print("Skipping pullIngredients: network unavailable")
+            return
+        }
+        
         do {
             let session = try await supabase.auth.session
             let userId = session.user.id.uuidString
@@ -369,6 +419,13 @@ class SyncEngine {
     
     // Push a single ingredient to Supabase
     func pushIngredient(_ ingredient: IngredientLibrary) async {
+        guard isNetworkAvailable else {
+            // If offline, leave as pending (don't mark as failed)
+            ingredient.syncStatus = SyncStatus.pending.rawValue
+            try? modelContext.save()
+            return
+        }
+        
         do {
             let session = try await supabase.auth.session
             let userId = session.user.id.uuidString
@@ -426,6 +483,11 @@ class SyncEngine {
     
     // Remove a shared task from current user's list (deletes the share, not the task)
     func removeSharedTask(taskId: UUID) async {
+        guard isNetworkAvailable else {
+            print("Skipping removeSharedTask: network unavailable")
+            return
+        }
+        
         do {
             let session = try await supabase.auth.session
             let userId = session.user.id.uuidString
@@ -438,6 +500,113 @@ class SyncEngine {
                 .execute()
         } catch {
             print("Error removing shared task: \(error)")
+        }
+    }
+    
+    // Retry failed sync items with exponential backoff
+    func retryFailedItems() async {
+        guard isNetworkAvailable else {
+            print("Skipping retryFailedItems: network unavailable")
+            return
+        }
+        
+        isSyncing = true
+        defer { isSyncing = false }
+        
+        let failedValue = SyncStatus.failed.rawValue
+        let retryDelays: [TimeInterval] = [2.0, 8.0, 30.0] // Exponential backoff: 2s, 8s, 30s
+        
+        // Retry failed tasks
+        let taskDescriptor = FetchDescriptor<Task>(
+            predicate: #Predicate<Task> { task in
+                task.syncStatus == failedValue
+            }
+        )
+        let failedTasks = (try? modelContext.fetch(taskDescriptor)) ?? []
+        
+        for task in failedTasks {
+            var success = false
+            for (attempt, delay) in retryDelays.enumerated() {
+                if attempt > 0 {
+                    try? await _Concurrency.Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                }
+                
+                await pushTask(task)
+                
+                if task.syncStatus == SyncStatus.synced.rawValue {
+                    success = true
+                    break
+                } else if task.syncStatus != failedValue {
+                    break
+                }
+            }
+            
+            if !success && task.syncStatus == failedValue {
+                syncError = "Some tasks failed to sync after retries"
+                print("Failed to sync task '\(task.title)' after \(retryDelays.count) attempts")
+            }
+        }
+        
+        // Retry failed grocery stores
+        let storeDescriptor = FetchDescriptor<GroceryStore>(
+            predicate: #Predicate<GroceryStore> { store in
+                store.syncStatus == failedValue
+            }
+        )
+        let failedStores = (try? modelContext.fetch(storeDescriptor)) ?? []
+        
+        for store in failedStores {
+            var success = false
+            for (attempt, delay) in retryDelays.enumerated() {
+                if attempt > 0 {
+                    try? await _Concurrency.Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                }
+                
+                await pushGroceryStore(store)
+                
+                if store.syncStatus == SyncStatus.synced.rawValue {
+                    success = true
+                    break
+                } else if store.syncStatus != failedValue {
+                    break
+                }
+            }
+            
+            if !success && store.syncStatus == failedValue {
+                syncError = "Some stores failed to sync after retries"
+                print("Failed to sync store '\(store.name)' after \(retryDelays.count) attempts")
+            }
+        }
+        
+        // Retry failed ingredients
+        let ingredientDescriptor = FetchDescriptor<IngredientLibrary>(
+            predicate: #Predicate<IngredientLibrary> { ingredient in
+                ingredient.syncStatus == failedValue
+            }
+        )
+        let failedIngredients = (try? modelContext.fetch(ingredientDescriptor)) ?? []
+        
+        for ingredient in failedIngredients {
+            var success = false
+            for (attempt, delay) in retryDelays.enumerated() {
+                if attempt > 0 {
+                    try? await _Concurrency.Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                }
+                
+                await pushIngredient(ingredient)
+                
+                if ingredient.syncStatus == SyncStatus.synced.rawValue {
+                    success = true
+                    break
+                } else if ingredient.syncStatus != failedValue {
+                    break
+                }
+            }
+            
+            if !success && ingredient.syncStatus == failedValue {
+                syncError = "Some ingredients failed to sync after retries"
+                print("Failed to sync ingredient '\(ingredient.name)' after \(retryDelays.count) attempts")
+            }
         }
     }
 }

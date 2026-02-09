@@ -5,31 +5,38 @@ import Supabase
 import SwiftUI
 
 @MainActor
-@Observable
 class PushNotificationManager: NSObject, UNUserNotificationCenterDelegate, UIApplicationDelegate {
     static let shared = PushNotificationManager()
     
     private let supabase = SupabaseConfig.client
     var pendingTaskNavigation: UUID?
     
-    override init() {
+    /// Must be nonisolated so @UIApplicationDelegateAdaptor can instantiate
+    /// this class without triggering a @MainActor dispatch assertion in Swift 6.
+    nonisolated override init() {
         super.init()
+    }
+    
+    /// Call once from a @MainActor context (e.g. .task) to wire up the
+    /// notification-center delegate.
+    func configure() {
         UNUserNotificationCenter.current().delegate = self
     }
     
     // MARK: - Push Registration
     
+    /// Uses the async version of requestAuthorization to avoid passing a closure
+    /// that Swift 6 would assume is @MainActor but UNUserNotificationCenter
+    /// calls on a background thread (causes _dispatch_assert_queue_fail).
     func registerForPushNotifications() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
-            if let error = error {
-                print("Push notification authorization error: \(error)")
-                return
-            }
-            
-            if granted {
-                DispatchQueue.main.async {
+        _Concurrency.Task {
+            do {
+                let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+                if granted {
                     UIApplication.shared.registerForRemoteNotifications()
                 }
+            } catch {
+                print("Push notification authorization error: \(error)")
             }
         }
     }

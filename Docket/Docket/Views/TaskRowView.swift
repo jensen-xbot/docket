@@ -4,7 +4,7 @@ import _Concurrency
 
 struct TaskRowView: View {
     @Bindable var task: Task
-    var syncEngine: SyncEngine?
+    var syncEngine: SyncEngine
     var onShare: (() -> Void)? = nil
     var currentUserProfile: UserProfile?
     var sharerProfile: UserProfile?
@@ -145,7 +145,7 @@ struct TaskRowView: View {
         }
         _Concurrency.Task {
             await NotificationManager.shared.scheduleNotification(for: task)
-            await syncEngine?.pushTask(task)
+            await syncEngine.pushTask(task)
         }
     }
     
@@ -156,22 +156,26 @@ struct TaskRowView: View {
             task.syncStatus = SyncStatus.pending.rawValue
         }
         _Concurrency.Task {
-            await syncEngine?.pushTask(task)
+            await syncEngine.pushTask(task)
         }
     }
     
     private func removeSharedTask() {
         _Concurrency.Task {
-            await syncEngine?.removeSharedTask(taskId: task.id)
+            await syncEngine.removeSharedTask(taskId: task.id)
         }
     }
 }
 
 #Preview {
-    List {
-        TaskRowView(task: Task(title: "High priority", dueDate: Date(), priority: .high))
-        TaskRowView(task: Task(title: "Completed", isCompleted: true, priority: .medium))
-        TaskRowView(task: Task(title: "Overdue", dueDate: .daysFromNow(-2), priority: .high))
+    let container = try! ModelContainer(for: Task.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+    let context = container.mainContext
+    let syncEngine = SyncEngine(modelContext: context, networkMonitor: nil)
+    
+    return List {
+        TaskRowView(task: Task(title: "High priority", dueDate: Date(), priority: .high), syncEngine: syncEngine)
+        TaskRowView(task: Task(title: "Completed", isCompleted: true, priority: .medium), syncEngine: syncEngine)
+        TaskRowView(task: Task(title: "Overdue", dueDate: .daysFromNow(-2), priority: .high), syncEngine: syncEngine)
     }
-    .modelContainer(for: Task.self, inMemory: true)
+    .modelContainer(container)
 }

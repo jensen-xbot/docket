@@ -6,41 +6,20 @@ import UIKit
 struct DocketApp: App {
     @UIApplicationDelegateAdaptor(PushNotificationManager.self) var appDelegate
     @State private var authManager = AuthManager()
+    @State private var networkMonitor = NetworkMonitor()
+    @State private var syncEngine: SyncEngine?
     private let modelContainer: ModelContainer
     
     init() {
-        // Register for push notifications on app launch
-        PushNotificationManager.shared.registerForPushNotifications()
+        // Push registration moved to AppContentView.task to avoid
+        // accessing @MainActor singleton from nonisolated DocketApp.init()
         do {
-            modelContainer = try Self.makeModelContainer()
+            modelContainer = try DocketApp.makeModelContainer()
         } catch {
             fatalError("Failed to create SwiftData container: \(error)")
         }
     }
     
-    var body: some Scene {
-        WindowGroup {
-            Group {
-                if authManager.isCheckingSession {
-                    // Splash screen while verifying saved session
-                    SplashView()
-                } else if authManager.isAuthenticated {
-                    TaskListView(authManager: authManager)
-                        .tint(.blue)
-                } else {
-                    AuthView(authManager: authManager)
-                }
-            }
-            .onOpenURL { url in
-                authManager.handleAuthCallback(url: url)
-            }
-            .task {
-                await NotificationManager.shared.requestAuthorization()
-            }
-        }
-        .modelContainer(modelContainer)
-    }
-
     private static func makeModelContainer() throws -> ModelContainer {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let docketSupport = appSupport.appendingPathComponent("Docket", isDirectory: true)
@@ -57,6 +36,99 @@ struct DocketApp: App {
             IngredientLibrary.self,
             configurations: config
         )
+    }
+    
+    var body: some Scene {
+        WindowGroup {
+            AppContentView(
+                authManager: authManager,
+                networkMonitor: networkMonitor,
+                syncEngine: $syncEngine,
+                modelContainer: modelContainer
+            )
+        }
+        .modelContainer(modelContainer)
+    }
+}
+
+// MARK: - App Content View (handles scenePhase observation)
+
+private struct AppContentView: View {
+    let authManager: AuthManager
+    let networkMonitor: NetworkMonitor
+    @Binding var syncEngine: SyncEngine?
+    let modelContainer: ModelContainer
+    @Environment(\.scenePhase) private var scenePhase
+    
+    var body: some View {
+        Group {
+            if authManager.isCheckingSession {
+                // Splash screen while verifying saved session
+                SplashView()
+            } else if authManager.isAuthenticated {
+                if let syncEngine = syncEngine {
+                    TaskListView(authManager: authManager)
+                        .tint(.blue)
+                        .environment(networkMonitor)
+                        .environment(syncEngine)
+                } else {
+                    // Show loading while SyncEngine is being created
+                    ProgressView()
+                        .onAppear {
+                            setupSyncEngine()
+                        }
+                }
+            } else {
+                AuthView(authManager: authManager)
+            }
+        }
+        .onOpenURL { url in
+            authManager.handleAuthCallback(url: url)
+        }
+        .task {
+            await NotificationManager.shared.requestAuthorization()
+            PushNotificationManager.shared.configure()
+            PushNotificationManager.shared.registerForPushNotifications()
+        }
+        .onChange(of: authManager.isAuthenticated) { _, isAuthenticated in
+            if isAuthenticated {
+                setupSyncEngine()
+            }
+        }
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            if newPhase == .active, authManager.isAuthenticated {
+                // Sync when app comes to foreground
+                _Concurrency.Task {
+                    await syncEngine?.syncAll()
+                }
+            }
+        }
+        .onAppear {
+            if authManager.isAuthenticated {
+                setupSyncEngine()
+            }
+        }
+    }
+    
+    private func setupSyncEngine() {
+        guard syncEngine == nil else { return }
+        
+        // Create SyncEngine with NetworkMonitor
+        let context = modelContainer.mainContext
+        syncEngine = SyncEngine(modelContext: context, networkMonitor: networkMonitor)
+        
+        // Set up network reconnect callback
+        networkMonitor.onReconnect = {
+            _Concurrency.Task { @MainActor in
+                guard let syncEngine = syncEngine else { return }
+                // Flush pending queue when network reconnects
+                await syncEngine.pushPendingTasks()
+                await syncEngine.pushPendingGroceryStores()
+                await syncEngine.pushPendingIngredients()
+                // Retry failed items
+                await syncEngine.retryFailedItems()
+            }
+        }
     }
 }
 
@@ -98,6 +170,7 @@ private struct SplashView: View {
 }
 
 #Preview {
+    let container = try! ModelContainer(for: Task.self, GroceryStore.self, IngredientLibrary.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
     TaskListView()
-        .modelContainer(for: [Task.self, GroceryStore.self, IngredientLibrary.self], inMemory: true)
+        .modelContainer(container)
 }

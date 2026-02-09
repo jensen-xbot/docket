@@ -20,7 +20,7 @@ class AuthManager {
     }
     
     private func checkAuthState() {
-        _Concurrency.Task {
+        _Concurrency.Task { @MainActor in
             let startTime = Date()
             
             do {
@@ -41,7 +41,7 @@ class AuthManager {
     }
     
     private func observeAuthChanges() {
-        _Concurrency.Task {
+        _Concurrency.Task { @MainActor in
             for await (event, session) in supabase.auth.authStateChanges {
                 switch event {
                 case .initialSession:

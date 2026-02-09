@@ -5,6 +5,7 @@ import _Concurrency
 struct EditTaskView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(SyncEngine.self) private var syncEngine
     @Query(sort: \GroceryStore.name) private var groceryTemplates: [GroceryStore]
     
     @Bindable var task: Task
@@ -22,7 +23,6 @@ struct EditTaskView: View {
     @State private var showDeleteConfirm = false
     @State private var isEditingCategory = false
     @State private var loadedTemplateName: String? = nil
-    @State private var syncEngine: SyncEngine? = nil
     
     // Save template prompt
     @State private var showSaveTemplate = false
@@ -273,9 +273,6 @@ struct EditTaskView: View {
                 )
             }
             .onAppear {
-                if syncEngine == nil {
-                    syncEngine = SyncEngine(modelContext: modelContext)
-                }
                 title = task.title
                 priority = task.priority
                 hasDueDate = task.dueDate != nil
@@ -310,7 +307,7 @@ struct EditTaskView: View {
         task.syncStatus = SyncStatus.pending.rawValue
         _Concurrency.Task {
             await NotificationManager.shared.scheduleNotification(for: task)
-            await syncEngine?.pushTask(task)
+            await syncEngine.pushTask(task)
         }
         dismiss()
     }
@@ -341,7 +338,7 @@ struct EditTaskView: View {
             store = created
         }
         _Concurrency.Task {
-            await syncEngine?.pushGroceryStore(store)
+            await syncEngine.pushGroceryStore(store)
         }
     }
     
@@ -369,7 +366,7 @@ struct EditTaskView: View {
             existing.updatedAt = Date()
             existing.syncStatus = SyncStatus.pending.rawValue
             _Concurrency.Task {
-                await syncEngine?.pushGroceryStore(existing)
+                await syncEngine.pushGroceryStore(existing)
             }
         }
     }
