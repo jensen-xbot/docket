@@ -86,7 +86,7 @@
   - [x] Word boundary matching for yes/no/dismiss detection (prevents "note" matching "no")
 - [x] TTS mute toggle in Settings
 
-### Phase 9: Voice Polish
+### Phase 9: Voice Polish — MOSTLY COMPLETE
 - [x] Upgrade TTS to OpenAI TTS API (tts-1, ~$0.0015/response) — natural-sounding voices replace robotic AVSpeechSynthesizer
   - [x] Edge Function `text-to-speech` calls OpenAI TTS API, returns MP3 audio
   - [x] TTSManager uses AVAudioPlayer for OpenAI TTS, keeps AVSpeechSynthesizer as fallback
@@ -97,9 +97,18 @@
 - [x] Loading states and progress indicators (pulsing mic, "thinking" state)
 - [x] Haptic feedback (start recording, task created, error)
 - [x] Edge cases (empty input, very long dictation, conversation timeout)
+- [x] Optional: Whisper API fallback for accuracy
+- [x] Voice recording UX overhaul (Feb 2026)
+  - [x] Fix live transcription flicker (unified displayMessages list with shared IDs)
+  - [x] Fix stale SFSpeechRecognizer callbacks overwriting committed text
+  - [x] Fix chat not auto-scrolling (ScrollViewReader + GeometryReader bottom-anchored)
+  - [x] Fix chat bubbles looking boxy (Spacer(minLength: 48) + clipShape)
+  - [x] Fix header wasting space (reduced VStack spacing, tighter padding)
+  - [x] Red breathing mic button with phaseAnimator (restarts reliably on every listen cycle)
+  - [x] Green audio-level indicator inside mic icon (RMS + EMA smoothing at ~12fps)
+  - [x] Double-processing guard (isProcessingUtterance flag)
 - [ ] Siri Shortcuts integration
 - [ ] Advanced parsing (recurring tasks, subtasks)
-- [x] Optional: Whisper API fallback for accuracy
 
 ## Future / v2.0
 - [x] Voice-aware grocery lists
@@ -126,6 +135,14 @@
 - [ ] App Store submission (see APP-STORE-GUIDE.md)
 
 ## Technical Decisions Made
+
+### Voice UX Learnings (Feb 2026)
+- **Live transcription → committed message flicker:** SwiftUI treats views with different `.id()` values as completely separate elements. When the live bubble had `.id("live")` and the committed message got `.id("msg-5")`, SwiftUI would animate one out and one in — even though they had identical text. Fix: use a unified `displayMessages` computed property where the live text gets `id: "msg-\(messages.count)"` — the same ID it will have once committed. SwiftUI sees it as one continuous view.
+- **SFSpeechRecognizer stale callbacks:** Calling `endAudio()` or `cancel()` on a recognition request triggers one final result callback on a background thread. That callback dispatches to MainActor and can overwrite `transcribedText` after the view already committed it to messages. Fix: `guard manager.isRecording else { return }` in the recognition handler — once stopped, all late callbacks are dropped.
+- **`.animation(.repeatForever)` doesn't restart:** SwiftUI's value-based `.animation(.repeatForever, value:)` only reliably starts on the first value change. When state cycles `.listening` → `.speaking` → `.listening`, the repeat animation doesn't restart. Fix: use `phaseAnimator([false, true], trigger: state)` which restarts the cycle on every trigger change.
+- **Audio level visualization:** Calculate RMS from each audio buffer on the IO thread (nonisolated), store in a class wrapper, poll with a MainActor task at ~12fps using exponential moving average (0.3 old + 0.7 new) for smooth visual feedback.
+- **ScrollView auto-scroll:** Remove `withAnimation` from scroll onChange handlers — it animates the content insert/remove, not just the scroll. Use `DispatchQueue.main.async { scrollProxy.scrollTo("bottom") }` so the layout commits first.
+- **GeometryReader for bottom-anchored chat:** Wrap ScrollView content in `.frame(minHeight: geometry.size.height, alignment: .bottom)` so messages anchor to the bottom when there are few messages (like iMessage), rather than floating at the top.
 
 ### Voice Architecture (v1.1) — Updated 2026-02-08
 - **Mode:** Conversational multi-turn (AI asks follow-ups when info is missing)
@@ -167,8 +184,7 @@
 ## Next Steps
 1. Polish TaskConfirmationView (inline editing, share targets)
 2. Share resolution (voice "share with Sarah" -> contacts lookup)
-3. Upgrade TTS to OpenAI TTS API (natural-sounding voices)
-4. Siri Shortcuts integration
-5. Advanced parsing (recurring tasks, subtasks)
-6. App Store submission (see APP-STORE-GUIDE.md)
-7. See [VOICE-TO-TASK-V2.md](VOICE-TO-TASK-V2.md) for full architecture
+3. Siri Shortcuts integration
+4. Advanced parsing (recurring tasks, subtasks)
+5. App Store submission (see APP-STORE-GUIDE.md)
+6. See [VOICE-TO-TASK-V2.md](VOICE-TO-TASK-V2.md) for full architecture

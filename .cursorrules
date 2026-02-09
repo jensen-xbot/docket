@@ -132,11 +132,19 @@ struct ParseResponse: Codable {
   - After TTS finishes (`speechSynthesizer(_:didFinish:)`), re-activate mic
 - **Conversation state:** Managed client-side as a `[(role: String, content: String)]` messages array
 - **Edge Function:** Receives messages array, returns either a follow-up question or completed tasks
-- **TTS:** Uses AI-generated `summary` field for natural readback — not raw field values
+- **TTS:** OpenAI TTS API (natural voices, nova default) with Apple AVSpeechSynthesizer fallback
 - **Share resolution:** `shareWith` name → contacts cache → email → `task_shares` table
 - **Permissions required:** Microphone (`NSMicrophoneUsageDescription`), Speech Recognition (`NSSpeechRecognitionUsageDescription`)
 - **No new dependencies:** Speech, AVFoundation, AVSpeechSynthesizer are all built into iOS
 - See [VOICE-TO-TASK-V2.md](VOICE-TO-TASK-V2.md) for full architecture
+
+## Voice UX Patterns (Learned the Hard Way)
+- **View identity = stability:** Live transcription and committed messages MUST share the same `.id()` scheme. Use a unified `displayMessages` computed property where the live text gets `id: "msg-\(messages.count)"` — the same ID it will have once committed. Prevents flicker.
+- **Guard stale speech callbacks:** `SFSpeechRecognizer` delivers one final callback after `endAudio()`/`cancel()`. Always `guard manager.isRecording else { return }` in the recognition handler.
+- **phaseAnimator > .animation(.repeatForever):** `.animation(.repeatForever, value:)` doesn't restart on re-entry. Use `phaseAnimator([false, true], trigger: state)` for repeating animations that reliably restart every time the mic turns on.
+- **Don't withAnimation scroll calls:** `withAnimation { scrollProxy.scrollTo() }` animates content insertions, not just scroll. Use `DispatchQueue.main.async { scrollProxy.scrollTo() }` instead.
+- **Audio level feedback:** Calculate RMS in the audio tap (nonisolated), poll to @MainActor at ~12fps with EMA smoothing (0.3 old + 0.7 new). Mask a colored mic icon from bottom with the level value.
+- **Bottom-anchored chat:** Use `GeometryReader` + `.frame(minHeight: geometry.size.height, alignment: .bottom)` inside ScrollView so messages anchor to the bottom when few.
 
 ## Development Workflow
 - Build iteratively: Model → ViewModel → View → Preview → Test on device

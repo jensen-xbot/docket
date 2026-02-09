@@ -19,6 +19,9 @@ This is a learning project — a training ground for building full-stack iOS app
 - **Frontend:** SwiftUI (iOS 17+)
 - **Database:** SwiftData + Supabase (sync)
 - **Auth:** Supabase Auth (Apple, email magic link)
+- **Voice transcription:** Apple SFSpeechRecognizer (on-device) + optional Whisper API fallback
+- **TTS readback:** OpenAI TTS API (natural voices) with Apple AVSpeechSynthesizer fallback
+- **AI parsing:** gpt-4.1-mini via OpenRouter → Supabase Edge Function
 - **Notifications:** UserNotifications (local) + APNs (push for shared tasks)
 - **Sharing:** MessageUI (email + SMS), Contacts framework (contact picker), Supabase Edge Functions (share push)
 - **Platform:** iOS (iPhone)
@@ -49,10 +52,10 @@ docket/
 
 ## Roadmap
 
-### MVP (Now)
+### v1.0 (Complete)
 - Create, edit, complete, delete tasks
-- Local persistence + cloud sync
-- Clean native iOS UI
+- Local persistence + cloud sync (Supabase)
+- Clean native iOS UI (dark mode from day 1)
 - Due dates + local notifications
 - Categories with custom icons and colors
 - Priorities with visual indicators
@@ -62,6 +65,16 @@ docket/
 - Profile hub (templates, notifications, contacts)
 - Branded splash screen with auth session check
 - Inline edit mode for categories and stores (rename, delete, customize)
+
+### v1.1 (In Progress)
+- Conversational voice-to-task (speak naturally, AI asks follow-ups)
+- Multi-turn dialogue with context-aware AI parsing
+- OpenAI TTS for natural voice readback
+- Voice task updates ("push my meeting to 3pm Wednesday")
+- Voice task deletion ("delete the Costco task")
+- Voice grocery list management (templates + ad-hoc items)
+- Real-time audio level visualization
+- Post-save corrections ("actually make it high priority")
 
 ## Getting Started
 

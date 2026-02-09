@@ -560,4 +560,87 @@ This affects every file that uses both your model and Swift concurrency.
 
 ---
 
-*This guide was battle-tested on Docket (iOS 17+, Swift 6.0, Xcode 16+, Supabase Swift SDK). Every crash and issue in this document was a real problem that was debugged and fixed. Last updated: Feb 8, 2026.*
+## SwiftUI Identity & Animation Gotchas
+
+These aren't concurrency crashes, but they're real bugs discovered alongside the Swift 6 voice work. Including them here because they affect the same codebase.
+
+### Rule 16: SwiftUI view identity determines flicker — use stable `.id()` values
+
+When transitioning between a "live" element and a "committed" element (e.g., live speech transcription → saved message), SwiftUI sees different `.id()` values as **completely separate views**. It animates one out and one in, causing a visible flash even when the text is identical.
+
+```swift
+// BAD — "live" and "msg-5" are different identities → flash on transition
+if isListening {
+    MessageBubble(message: liveText).id("live")
+}
+ForEach(messages) { msg in
+    MessageBubble(message: msg).id("msg-\(index)")
+}
+
+// GOOD — unified list, live text gets the same ID it will have when committed
+var displayMessages: [DisplayMessage] {
+    var result = messages.enumerated().map { i, msg in
+        DisplayMessage(id: "msg-\(i)", message: msg)
+    }
+    if isListening && !liveText.isEmpty {
+        // This ID matches what it will be when appended to messages
+        result.append(DisplayMessage(id: "msg-\(messages.count)", message: liveText))
+    }
+    return result
+}
+```
+
+### Rule 17: SFSpeechRecognizer delivers stale callbacks after stopRecording()
+
+Calling `endAudio()` or `cancel()` on `SFSpeechAudioBufferRecognitionRequest` triggers one final result callback on a background thread. If this callback dispatches to `@MainActor` and overwrites `transcribedText`, it can resurrect text the view already committed — causing ghost bubbles.
+
+```swift
+// GOOD — guard against stale callbacks
+guard manager.isRecording else { return }  // Drop late arrivals
+if let transcription {
+    manager.transcribedText = transcription
+}
+```
+
+### Rule 18: `.animation(.repeatForever)` doesn't restart on re-entry
+
+SwiftUI's `.animation(.easeInOut.repeatForever(), value: isListening)` only starts the repeating animation on the **first** `true` transition. When state cycles `true → false → true`, the animation doesn't restart — it uses a default transition instead.
+
+```swift
+// BAD — animation stalls after first cycle
+Circle()
+    .scaleEffect(isListening ? 1.1 : 1.0)
+    .animation(.easeInOut(duration: 0.6).repeatForever(), value: isListening)
+
+// GOOD — phaseAnimator restarts on every trigger change (iOS 17+)
+Circle()
+    .phaseAnimator([false, true], trigger: state) { content, phase in
+        content.opacity(state == .listening && phase ? 0.8 : 1.0)
+    } animation: { _ in
+        .easeInOut(duration: 1.2)
+    }
+```
+
+### Rule 19: Don't use `withAnimation` on ScrollViewReader scroll calls
+
+`withAnimation { scrollProxy.scrollTo("bottom") }` animates **all content changes** in the scroll view, not just the scroll position. This means new messages appear with a fade/slide transition, which feels broken when combined with view identity changes.
+
+```swift
+// BAD — animates content insertion AND scroll
+.onChange(of: messages.count) { _, _ in
+    withAnimation(.easeOut(duration: 0.2)) {
+        scrollProxy.scrollTo("bottom", anchor: .bottom)
+    }
+}
+
+// GOOD — let layout commit, then scroll without animation
+.onChange(of: messages.count) { _, _ in
+    DispatchQueue.main.async {
+        scrollProxy.scrollTo("bottom", anchor: .bottom)
+    }
+}
+```
+
+---
+
+*This guide was battle-tested on Docket (iOS 17+, Swift 6.0, Xcode 16+, Supabase Swift SDK). Every crash and issue in this document was a real problem that was debugged and fixed. Last updated: Feb 9, 2026.*
