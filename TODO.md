@@ -144,6 +144,32 @@
   - [ ] TTS fallback rate
   - [ ] personalization hit rate (alias/mapping applied)
 
+### Pre-Launch Hardening
+- [ ] Edge Function rate limiting (prevent abuse/runaway costs — 60 req/hr/user)
+- [ ] Edge Function request timeout (15s abort controller — prevents hanging requests)
+- [ ] Transcription retry logic (auto-retry on transient SFSpeechRecognizer failures, max 2 retries)
+- [ ] Haptic refinement (distinct patterns: success, correction, error, speech detected)
+- [ ] Audio waveform visualization (animate bars with voice level during recording)
+- [ ] Privacy manifest (required for App Store since 2024)
+- [ ] Accessibility audit (VoiceOver on VoiceRecordingView, 44pt tap targets, Reduce Motion)
+- [ ] Pre-launch test matrix:
+  - [ ] Network offline during voice → offline indicator, queue for retry
+  - [ ] User interrupts TTS → stops speaking, listens for new input
+  - [ ] App backgrounded mid-recording → pauses, resumes on foreground
+  - [ ] Very long dictation (2+ min) → no memory issues
+  - [ ] Rapid mic button tap → debounces, no crash
+  - [ ] AirPods connected → routes audio correctly
+  - [ ] Phone call interrupts → stops recording, graceful recovery
+
+### Optimization (post-launch)
+- [ ] Task context trimming (send only incomplete + recent 7 days, cap at 20 tasks)
+- [ ] Task context hash caching (skip re-sending if task list unchanged between turns)
+
+### Analytics
+- [ ] Voice session tracking (duration, tasks created, turns, TTS voice used)
+- [ ] Error tracking (transcription failures, AI parse errors, TTS fallback rate)
+- [ ] Engagement metrics (voice vs manual creation ratio, edit-after-voice rate)
+
 ## Sharing System V2 (Epic)
 **Locked decisions (2026-02):**
 - **Editing model:** Both users can edit shared tasks; last-write-wins conflict behavior.
