@@ -3,21 +3,40 @@ import SwiftUI
 struct SharedAvatarView: View {
     let currentUserProfile: UserProfile?
     let sharerProfile: UserProfile?
+    /// For owner-side: profiles of people this task is shared with
+    let recipientProfiles: [UserProfile]?
     let size: CGFloat
     
+    /// Recipient view: shows current user + sharer overlap
     init(currentUserProfile: UserProfile?, sharerProfile: UserProfile?, size: CGFloat = 24) {
         self.currentUserProfile = currentUserProfile
         self.sharerProfile = sharerProfile
+        self.recipientProfiles = nil
+        self.size = size
+    }
+    
+    /// Owner view: shows recipients this task is shared with
+    init(recipientProfiles: [UserProfile], size: CGFloat = 24) {
+        self.currentUserProfile = nil
+        self.sharerProfile = nil
+        self.recipientProfiles = recipientProfiles
         self.size = size
     }
     
     var body: some View {
-        HStack(spacing: -(size * 0.4)) {
-            // Current user's avatar (back, left)
-            avatarView(profile: currentUserProfile, isCurrentUser: true)
-            
-            // Sharer's avatar (front, right, overlapping)
-            avatarView(profile: sharerProfile, isCurrentUser: false)
+        if let recipients = recipientProfiles, !recipients.isEmpty {
+            // Owner-side: stack of recipient avatars
+            HStack(spacing: -(size * 0.4)) {
+                ForEach(recipients.prefix(3), id: \.id) { profile in
+                    avatarView(profile: profile, isCurrentUser: false)
+                }
+            }
+        } else {
+            // Recipient-side: current user + sharer overlap
+            HStack(spacing: -(size * 0.4)) {
+                avatarView(profile: currentUserProfile, isCurrentUser: true)
+                avatarView(profile: sharerProfile, isCurrentUser: false)
+            }
         }
     }
     

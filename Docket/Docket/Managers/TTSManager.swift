@@ -3,6 +3,13 @@ import AVFoundation
 import Supabase
 import _Concurrency
 
+#if DEBUG
+private func voiceTraceTTS(_ event: String) {
+    let t = String(format: "%.3f", Date().timeIntervalSince1970)
+    print("[VoiceTrace][\(t)] \(event)")
+}
+#endif
+
 @Observable
 @MainActor
 class TTSManager: NSObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDelegate {
@@ -60,6 +67,38 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDelegate {
         }
     }
     
+    /// Reveal text and start audio in sync when possible: if TTS is ready within `boundedWait` seconds, call `onTextReveal` then play together; otherwise call `onTextReveal` then show "Preparing voice..." until playback starts. Uses 8s request timeout and Apple fallback.
+    func speakWithBoundedSync(text: String, boundedWait: TimeInterval = 0.75, onTextReveal: @escaping () -> Void, onFinish: (() -> Void)?) {
+        guard !isMuted else {
+            onTextReveal()
+            onFinish?()
+            return
+        }
+        stop()
+        completionHandler = onFinish
+        if !useOpenAITTS {
+            onTextReveal()
+            speakWithApple(text)
+            return
+        }
+        _Concurrency.Task {
+            let fetchTask = _Concurrency.Task { await self.fetchOpenAIAudio(text: text) }
+            let timeoutNs = UInt64(boundedWait * 1_000_000_000)
+            _ = await withTaskGroup(of: Int.self) { group in
+                group.addTask { _ = await fetchTask.value; return 1 }
+                group.addTask { try? await _Concurrency.Task.sleep(nanoseconds: timeoutNs); return 2 }
+                return await group.next() ?? 2
+            }
+            onTextReveal()
+            let url = await fetchTask.value
+            if let url {
+                playAudioFile(url: url, fallbackText: text)
+            } else {
+                speakWithApple(text)
+            }
+        }
+    }
+    
     private func speakWithApple(_ text: String) {
         let utterance = AVSpeechUtterance(string: text)
         utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
@@ -69,60 +108,67 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDelegate {
         synthesizer.speak(utterance)
     }
     
-    private func speakWithOpenAI(_ text: String, onFinish: (() -> Void)?) async {
+    /// Fetches OpenAI TTS audio; returns temp file URL or nil (caller should use Apple fallback). Sets isGeneratingTTS. Request timeout 8s.
+    private func fetchOpenAIAudio(text: String) async -> URL? {
         struct TTSRequest: Codable {
             let text: String
             let voice: String
         }
         
-        // Set generating flag immediately so UI can show loading state
         isGeneratingTTS = true
+        #if DEBUG
+        voiceTraceTTS("TTS start")
+        #endif
+        defer { isGeneratingTTS = false }
         
         do {
-            // Get auth session and build Edge Function URL
             let session = try await supabase.auth.session
             guard let functionURL = URL(string: "\(SupabaseConfig.urlString)/functions/v1/text-to-speech") else {
                 throw NSError(domain: "TTSManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid Supabase URL"])
             }
-            
-            // Build request
             var request = URLRequest(url: functionURL)
             request.httpMethod = "POST"
             request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.timeoutInterval = 8
+            request.httpBody = try JSONEncoder().encode(TTSRequest(text: text, voice: openAITTSVoice))
             
-            let requestBody = TTSRequest(text: text, voice: openAITTSVoice)
-            request.httpBody = try JSONEncoder().encode(requestBody)
-            
-            // Call Edge Function and get binary MP3 data
             let (audioData, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse,
-                  httpResponse.statusCode == 200 else {
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
                 throw NSError(domain: "TTSManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "TTS service returned error"])
             }
-            
-            // Write to temp file (AVAudioPlayer needs a file URL)
             let tempURL = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString)
                 .appendingPathExtension("mp3")
-            
             try audioData.write(to: tempURL)
-            
-            // Create and play audio player
-            let player = try AVAudioPlayer(contentsOf: tempURL)
-            player.delegate = self
-            audioPlayer = player
-            
-            // Clear generating flag and start playing
-            isGeneratingTTS = false
-            isSpeaking = true
-            player.play()
-            
+            return tempURL
         } catch {
             print("[TTSManager] OpenAI TTS failed, falling back to Apple: \(error)")
-            isGeneratingTTS = false
-            // Fallback to Apple TTS on error
+            return nil
+        }
+    }
+    
+    private func playAudioFile(url: URL, fallbackText: String) {
+        do {
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.delegate = self
+            audioPlayer = player
+            isSpeaking = true
+            #if DEBUG
+            voiceTraceTTS("TTS audio ready, playback start")
+            #endif
+            player.play()
+        } catch {
+            try? FileManager.default.removeItem(at: url)
+            speakWithApple(fallbackText)
+        }
+    }
+    
+    private func speakWithOpenAI(_ text: String, onFinish: (() -> Void)?) async {
+        completionHandler = onFinish
+        if let url = await fetchOpenAIAudio(text: text) {
+            playAudioFile(url: url, fallbackText: text)
+        } else {
             speakWithApple(text)
         }
     }
@@ -147,6 +193,9 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDelegate {
     
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         _Concurrency.Task { @MainActor in
+            #if DEBUG
+            voiceTraceTTS("TTS playback finish (Apple)")
+            #endif
             isSpeaking = false
             let handler = completionHandler
             completionHandler = nil
@@ -169,6 +218,9 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDelegate {
         
         _Concurrency.Task { @MainActor [weak self] in
             guard let self else { return }
+            #if DEBUG
+            voiceTraceTTS("TTS playback finish (OpenAI)")
+            #endif
             self.isSpeaking = false
             let handler = self.completionHandler
             self.completionHandler = nil

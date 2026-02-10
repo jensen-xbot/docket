@@ -43,6 +43,24 @@
 
 ## v1.1: Conversational Voice-to-Task - IN PROGRESS
 
+### P0: Active Stability Hotfixes — Voice Hotfix One-Pass DONE
+- [x] **Reproduce + eliminate lingering transcription flicker**
+  - [x] Add deterministic repro matrix (see below)
+  - [x] Add temporary timestamped event tracing (DEBUG only: `[VoiceTrace]`)
+  - [x] Single-source rendering: live transcript stays visible until commit (removed `!isProcessingUtterance` from displayMessages)
+  - [ ] Confirm on device under network latency and long dictation; remove debug instrumentation after validation
+  - **Repro matrix (DEBUG build):** Manual vs silence stop | Whisper on/off | Natural TTS on/off | Interruption during listen/speak. Events: speech partial, silence reset/fire, stopRecording entry/exit, message append, transcribedText clear, TTS start/audio-ready/playback/finish.
+- [x] **Fix pre-silence flash** — live transcript remains visible until commit + clear (atomic on MainActor).
+- [x] **Interruption handling**
+  - [x] `.ended`: view-driven `shouldResumeAfterInterruption`; manager resumes listening when flag set and was in listening flow
+  - [x] `.began`: manager stops recording
+  - [ ] QA: phone call, Siri, AirPods during handoff
+- [x] **Silence timeout 2.2s** — baseline 2.2s (short), 2.8s (3+ words); adaptive in SpeechRecognitionManager.
+- [x] **TTS presentation (synchronized text + audio)**
+  - [x] `speakWithBoundedSync`: request TTS first; if ready within 750ms reveal text + play together; else reveal text and show "Preparing voice..." until playback
+  - [x] TTS request timeout 8s; fallback to Apple TTS
+- **Residual risk:** Remove `#if DEBUG` VoiceTrace after device validation. Manual QA for interruption + long dictation recommended.
+
 ### Phase 6: Speech Capture + TTS Foundation - COMPLETE
 - [x] Add Speech framework entitlement
 - [x] Add `NSMicrophoneUsageDescription` and `NSSpeechRecognitionUsageDescription` to Info.plist
@@ -52,7 +70,8 @@
 - [x] Handle audio session interruptions (`AVAudioSession.interruptionNotification`)
 - [x] Build VoiceRecordingView (mic button + conversation overlay)
 - [x] Fix Swift 6 dispatch_assert_queue crashes (nonisolated static helpers, async APIs)
-- [x] Silence detection with adaptive timeout (2.5s short / 3.5s long utterances)
+- [x] Silence detection with adaptive timeout (2.2s short / 2.8s long utterances)
+- [x] Tune silence timeout for production UX (2.2s baseline, validate on real speech)
 - [x] Test on device: speak -> transcription -> TTS readback -> mic restarts
 
 ### Phase 7: Conversational AI Parsing - COMPLETE
@@ -110,6 +129,48 @@
 - [ ] Siri Shortcuts integration
 - [ ] Advanced parsing (recurring tasks, subtasks)
 
+### Phase 10: Personalization Adaptation (v1.2 Foundation)
+- [ ] Personalization architecture + privacy spec (opt-in, reset, retention window)
+- [ ] Add `TaskSource` metadata to distinguish voice-created tasks from manual tasks
+- [ ] Snapshot-based correction tracking on edits to voice-created tasks
+- [ ] Create `record-corrections` Edge Function with auth, validation, deduplication, and rate limiting
+- [ ] Create `user_voice_profiles` schema (vocabulary aliases, category mappings, store aliases, time habits)
+- [ ] Inject compact personalization context into `parse-voice-tasks` prompt
+- [ ] Add UI controls in Profile: "Personalization On/Off" + "Reset learned voice data"
+- [ ] Add metrics dashboard:
+  - [ ] edit-after-voice rate
+  - [ ] auto-confirm rate
+  - [ ] turns-to-complete
+  - [ ] TTS fallback rate
+  - [ ] personalization hit rate (alias/mapping applied)
+
+## Sharing System V2 (Epic)
+**Locked decisions (2026-02):**
+- **Editing model:** Both users can edit shared tasks; last-write-wins conflict behavior.
+- **Invite gating:** Require invite/connection acceptance for new contacts; existing accepted contacts can share immediately.
+- **Voice latency:** Deterministic control intents stay local; semantic parsing stays in Edge Function.
+
+- [x] Phase 1: UI and visibility (no schema break)
+  - [x] Share method sheet: Docket first, larger/bolder with logo
+  - [x] Sender-side "shared with" indicator on task rows
+  - [x] SyncEngine: pull-on-reconnect
+- [x] Phase 2: Invite/connection model (backend migrations)
+  - [x] task_shares status lifecycle: pending, accepted, declined
+  - [x] Recipient UPDATE policy for accept/decline
+- [x] Phase 3: Invite UX + notifications center
+  - [x] notifications table + RLS
+  - [x] Bell badge + inbox UI
+  - [x] Accept/decline in contacts
+- [x] Phase 4: Realtime bilateral edits (LWW)
+  - [x] Supabase Realtime subscriptions in SyncEngine
+- [x] Phase 5: Documentation (TODO, PRD, WORKFLOW)
+- [ ] Phase 6: QA — run verification matrix:
+  - [ ] Owner shares to accepted contact → immediate collaboration
+  - [ ] Owner shares to new contact → pending invite; recipient accept/decline
+  - [ ] Both users edit same task → LWW converges on both devices
+  - [ ] Push notification → opens correct destination; badge updates
+  - [ ] Manual QA: owner/recipient × online/offline/reconnect
+
 ## Future / v2.0
 - [x] Voice-aware grocery lists
   - [x] Send user's store names + template item counts as context to Edge Function
@@ -143,6 +204,14 @@
 - **Audio level visualization:** Calculate RMS from each audio buffer on the IO thread (nonisolated), store in a class wrapper, poll with a MainActor task at ~12fps using exponential moving average (0.3 old + 0.7 new) for smooth visual feedback.
 - **ScrollView auto-scroll:** Remove `withAnimation` from scroll onChange handlers — it animates the content insert/remove, not just the scroll. Use `DispatchQueue.main.async { scrollProxy.scrollTo("bottom") }` so the layout commits first.
 - **GeometryReader for bottom-anchored chat:** Wrap ScrollView content in `.frame(minHeight: geometry.size.height, alignment: .bottom)` so messages anchor to the bottom when there are few messages (like iMessage), rather than floating at the top.
+- **Latency split (client vs function):** Keep deterministic control intents on-device (dismiss/thanks/session-control) and reserve Edge Function calls for semantic task parsing (`question/complete/update/delete`) to avoid unnecessary round-trips.
+
+### Personalization Methodology (v1.2)
+- **Learn from corrections, not assumptions:** only learn when users explicitly edit AI output
+- **Prioritize high-signal fields first:** title vocabulary, category mapping, store aliases, time habits
+- **Keep context compact:** send top ranked mappings by recency/frequency, not full history
+- **Ship behind guardrails:** opt-in controls, retention limits, reset button, and no raw audio storage
+- **Measure quality with behavior:** success = fewer post-voice edits + faster confirmation, not just model confidence
 
 ### Voice Architecture (v1.1) — Updated 2026-02-08
 - **Mode:** Conversational multi-turn (AI asks follow-ups when info is missing)

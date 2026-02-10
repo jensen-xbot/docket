@@ -526,6 +526,48 @@ private struct ShareMethodSheet: View {
                     .padding(.bottom, 20)
                 
                 VStack(spacing: 12) {
+                    // Share via Docket (primary, first, larger)
+                    let isMember = contact.contactUserId != nil
+                    Button {
+                        if isMember { onDocket() }
+                    } label: {
+                        HStack(spacing: 14) {
+                            Image(systemName: "checklist")
+                                .font(.system(size: 26, weight: .semibold))
+                                .frame(width: 32, alignment: .center)
+                                .foregroundStyle(isMember ? .blue : .gray.opacity(0.5))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Share via Docket")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                                if !isMember {
+                                    Text("Not a member")
+                                        .font(.caption)
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                            Spacer()
+                            if isMember {
+                                Image(systemName: "checklist.badge.plus")
+                                    .font(.title2)
+                                    .foregroundStyle(.blue)
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(.secondarySystemGroupedBackground))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(isMember ? Color.blue.opacity(0.3) : Color.clear, lineWidth: 1.5)
+                                )
+                        )
+                        .foregroundStyle(isMember ? Color.primary : Color.gray.opacity(0.5))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!isMember)
+                    
                     // Email option
                     Button {
                         onEmail()
@@ -569,31 +611,6 @@ private struct ShareMethodSheet: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    
-                    // Share via Docket (always visible, greyed if not a member)
-                    let isMember = contact.contactUserId != nil
-                    Button {
-                        if isMember { onDocket() }
-                    } label: {
-                        HStack {
-                            Image(systemName: "checklist")
-                                .frame(width: 24)
-                            Text("Share via Docket")
-                            Spacer()
-                            if !isMember {
-                                Text("Not a member")
-                                    .font(.caption)
-                                    .foregroundStyle(.tertiary)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .background(Color(.secondarySystemGroupedBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                        .foregroundStyle(isMember ? .blue : .gray.opacity(0.5))
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!isMember)
                 }
                 .padding(.horizontal, 16)
                 

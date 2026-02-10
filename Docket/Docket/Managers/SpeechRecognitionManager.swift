@@ -3,6 +3,13 @@ import Speech
 import AVFoundation
 import Combine
 
+#if DEBUG
+private func voiceTrace(_ event: String) {
+    let t = String(format: "%.3f", Date().timeIntervalSince1970)
+    print("[VoiceTrace][\(t)] \(event)")
+}
+#endif
+
 @Observable
 @MainActor
 class SpeechRecognitionManager: NSObject {
@@ -17,12 +24,15 @@ class SpeechRecognitionManager: NSObject {
     var errorMessage: String?
     var didFinishUtterance = false // Set to true when silence timer auto-stops recording
     var audioLevel: Float = 0 // 0.0–1.0 for visual feedback
+    /// Set by the view: if true when an audio interruption ends, we will call startRecording() to resume listening.
+    var shouldResumeAfterInterruption = false
     
     private var audioSessionConfigured = false
     private var interruptionObserver: (any NSObjectProtocol)?
     private var silenceTimerTask: _Concurrency.Task<Void, Never>?
     private var levelPollTask: _Concurrency.Task<Void, Never>?
-    private let silenceTimeoutSeconds: TimeInterval = 3.5 // Generous pause — users need time to think
+    private let shortSilenceTimeoutSeconds: TimeInterval = 2.2
+    private let longSilenceTimeoutSeconds: TimeInterval = 2.8
     
     // Audio buffer for Whisper transcription
     // Using a class wrapper so we can mutate from nonisolated context
@@ -77,7 +87,13 @@ class SpeechRecognitionManager: NSObject {
                         await self.stopRecording()
                     }
                 case .ended:
-                    break
+                    _Concurrency.Task { @MainActor [weak self] in
+                        guard let self else { return }
+                        guard self.shouldResumeAfterInterruption else { return }
+                        self.shouldResumeAfterInterruption = false
+                        guard !self.isRecording else { return }
+                        await self.startRecording()
+                    }
                 @unknown default:
                     break
                 }
@@ -267,6 +283,9 @@ class SpeechRecognitionManager: NSObject {
                 guard manager.isRecording else { return }
                 
                 if let transcription {
+                    #if DEBUG
+                    voiceTrace("speech partial update")
+                    #endif
                     manager.transcribedText = transcription
                     
                     // Reset silence timer whenever new transcription arrives
@@ -285,7 +304,9 @@ class SpeechRecognitionManager: NSObject {
     
     func stopRecording() async {
         guard isRecording else { return }
-        
+        #if DEBUG
+        voiceTrace("SpeechRecognitionManager stopRecording entry")
+        #endif
         // Cancel silence timer and level polling
         silenceTimerTask?.cancel()
         silenceTimerTask = nil
@@ -303,6 +324,9 @@ class SpeechRecognitionManager: NSObject {
         recognitionTask = nil
         
         isRecording = false
+        #if DEBUG
+        voiceTrace("SpeechRecognitionManager stopRecording exit")
+        #endif
     }
     
     /// Exports the captured audio buffer as WAV format Data
@@ -359,12 +383,15 @@ class SpeechRecognitionManager: NSObject {
     private func resetSilenceTimer() {
         // Cancel existing timer
         silenceTimerTask?.cancel()
+        #if DEBUG
+        voiceTrace("silence timer reset")
+        #endif
         
         // Adaptive timeout based on how much the user has said:
-        // - 1-2 words (e.g., "yes", "add it"): 2.5s — quick confirmation
-        // - 3+ words (full sentence): 3.5s — give time to think mid-sentence
+        // - 1-2 words (e.g., "yes", "add it"): 2.2s — quick confirmation
+        // - 3+ words (full sentence): 2.8s — slight extra room for natural pauses
         let wordCount = transcribedText.split(separator: " ").count
-        let timeout = wordCount >= 3 ? silenceTimeoutSeconds : 2.5
+        let timeout = wordCount >= 3 ? longSilenceTimeoutSeconds : shortSilenceTimeoutSeconds
         
         // Start new timer
         silenceTimerTask = _Concurrency.Task { [weak self] in
@@ -375,6 +402,9 @@ class SpeechRecognitionManager: NSObject {
             
             // If still recording after silence timeout, auto-stop
             if self.isRecording {
+                #if DEBUG
+                voiceTrace("silence timer fire")
+                #endif
                 self.didFinishUtterance = true
                 await self.stopRecording()
             }

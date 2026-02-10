@@ -4,7 +4,9 @@ import Supabase
 import _Concurrency
 
 struct ContactsListView: View {
+    @Environment(SyncEngine.self) private var syncEngine
     @State private var contacts: [ContactRow] = []
+    @State private var pendingInvites: [PendingInviteRow] = []
     @State private var newEmail: String = ""
     @State private var newPhone: String = ""
     @State private var newName: String = ""
@@ -14,6 +16,17 @@ struct ContactsListView: View {
     
     var body: some View {
         List {
+            // MARK: - Pending Invites
+            if !pendingInvites.isEmpty {
+                Section {
+                    ForEach(pendingInvites) { invite in
+                        pendingInviteRow(invite)
+                    }
+                } header: {
+                    Text("Pending Invites")
+                }
+            }
+            
             // MARK: - Import & Add buttons
             Section {
                 Button {
@@ -112,11 +125,183 @@ struct ContactsListView: View {
         .navigationTitle("My Contacts")
         .onAppear {
             loadContacts()
+            loadPendingInvites()
+        }
+        .refreshable {
+            await loadContactsAsync()
+            await loadPendingInvitesAsync()
         }
         .sheet(isPresented: $showContactPicker) {
             NativeContactPicker { selectedContacts in
                 importContacts(selectedContacts)
             }
+        }
+    }
+    
+    // MARK: - Pending Invite Row
+    
+    private func pendingInviteRow(_ invite: PendingInviteRow) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Image(systemName: "checklist.badge.plus")
+                    .font(.title3)
+                    .foregroundStyle(.blue)
+                    .frame(width: 32)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(invite.taskTitle)
+                        .font(.body)
+                        .fontWeight(.medium)
+                    Text("\(invite.ownerName ?? "Someone") wants to share this task with you")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            HStack(spacing: 12) {
+                Button {
+                    acceptInvite(invite)
+                } label: {
+                    Text("Accept")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(Color.green)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                Button {
+                    declineInvite(invite)
+                } label: {
+                    Text("Decline")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(Color(.tertiarySystemFill))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 8)
+        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+    }
+    
+    private func acceptInvite(_ invite: PendingInviteRow) {
+        _Concurrency.Task {
+            do {
+                try await SupabaseConfig.client
+                    .from("task_shares")
+                    .update(["status": "accepted"])
+                    .eq("id", value: invite.id.uuidString)
+                    .execute()
+                await loadPendingInvitesAsync()
+                await syncEngine.syncAll()
+            } catch {
+                print("Accept invite error: \(error)")
+            }
+        }
+    }
+    
+    private func declineInvite(_ invite: PendingInviteRow) {
+        _Concurrency.Task {
+            do {
+                try await SupabaseConfig.client
+                    .from("task_shares")
+                    .update(["status": "declined"])
+                    .eq("id", value: invite.id.uuidString)
+                    .execute()
+                await loadPendingInvitesAsync()
+            } catch {
+                print("Decline invite error: \(error)")
+            }
+        }
+    }
+    
+    private func loadPendingInvites() {
+        _Concurrency.Task {
+            await loadPendingInvitesAsync()
+        }
+    }
+    
+    private func loadPendingInvitesAsync() async {
+        do {
+            let session = try await SupabaseConfig.client.auth.session
+            let userId = session.user.id.uuidString
+            
+            struct TaskShareBasic: Codable {
+                let id: UUID
+                let taskId: UUID
+                let ownerId: UUID
+                enum CodingKeys: String, CodingKey {
+                    case id
+                    case taskId = "task_id"
+                    case ownerId = "owner_id"
+                }
+            }
+            
+            let shares: [TaskShareBasic] = try await SupabaseConfig.client
+                .from("task_shares")
+                .select("id, task_id, owner_id")
+                .eq("shared_with_id", value: userId)
+                .eq("status", value: "pending")
+                .order("created_at", ascending: false)
+                .execute()
+                .value
+            
+            guard !shares.isEmpty else {
+                pendingInvites = []
+                return
+            }
+            
+            let taskIds = shares.map { $0.taskId }
+            let ownerIds = Array(Set(shares.map { $0.ownerId }))
+            
+            struct TaskTitleRow: Codable {
+                let id: UUID
+                let title: String
+            }
+            struct OwnerProfileRow: Codable {
+                let id: UUID
+                let displayName: String?
+                let email: String?
+                enum CodingKeys: String, CodingKey {
+                    case id
+                    case displayName = "display_name"
+                    case email
+                }
+            }
+            
+            let tasks: [TaskTitleRow] = (try? await SupabaseConfig.client
+                .from("tasks")
+                .select("id, title")
+                .in("id", values: taskIds.map { $0.uuidString })
+                .execute()
+                .value) ?? []
+            let profiles: [OwnerProfileRow] = (try? await SupabaseConfig.client
+                .from("user_profiles")
+                .select("id, display_name, email")
+                .in("id", values: ownerIds.map { $0.uuidString })
+                .execute()
+                .value) ?? []
+            
+            let taskById = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0.title) })
+            let profileById = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0.displayName ?? $0.email ?? "Unknown") })
+            
+            pendingInvites = shares.map { share in
+                PendingInviteRow(
+                    id: share.id,
+                    taskId: share.taskId,
+                    taskTitle: taskById[share.taskId] ?? "Untitled Task",
+                    ownerId: share.ownerId,
+                    ownerName: profileById[share.ownerId]
+                )
+            }
+        } catch {
+            pendingInvites = []
         }
     }
     
@@ -166,20 +351,24 @@ struct ContactsListView: View {
     
     private func loadContacts() {
         _Concurrency.Task {
-            do {
-                let session = try await SupabaseConfig.client.auth.session
-                let userId = session.user.id.uuidString
-                let response: [ContactRow] = try await SupabaseConfig.client
-                    .from("contacts")
-                    .select()
-                    .eq("user_id", value: userId)
-                    .order("created_at", ascending: false)
-                    .execute()
-                    .value
-                contacts = response
-            } catch {
-                contacts = []
-            }
+            await loadContactsAsync()
+        }
+    }
+    
+    private func loadContactsAsync() async {
+        do {
+            let session = try await SupabaseConfig.client.auth.session
+            let userId = session.user.id.uuidString
+            let response: [ContactRow] = try await SupabaseConfig.client
+                .from("contacts")
+                .select()
+                .eq("user_id", value: userId)
+                .order("created_at", ascending: false)
+                .execute()
+                .value
+            contacts = response
+        } catch {
+            contacts = []
         }
     }
     
@@ -292,6 +481,16 @@ struct ContactsListView: View {
             }
         }
     }
+}
+
+// MARK: - Pending Invite Row Model
+
+struct PendingInviteRow: Identifiable {
+    let id: UUID
+    let taskId: UUID
+    let taskTitle: String
+    let ownerId: UUID
+    let ownerName: String?
 }
 
 // MARK: - Contact Row Model

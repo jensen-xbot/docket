@@ -8,12 +8,14 @@ struct TaskRowView: View {
     var onShare: (() -> Void)? = nil
     var currentUserProfile: UserProfile?
     var sharerProfile: UserProfile?
+    /// For owner-side: recipients this task is shared with
+    var sharedWithProfiles: [UserProfile] = []
     private var categoryStore: CategoryStore { CategoryStore.shared }
     
     var body: some View {
         HStack(spacing: 0) {
-            // Colored left border for shared tasks
-            if task.isShared {
+            // Colored left border for shared tasks (recipient) or shared-with (owner)
+            if task.isShared || !sharedWithProfiles.isEmpty {
                 Rectangle()
                     .fill(.blue)
                     .frame(width: 3)
@@ -90,12 +92,14 @@ struct TaskRowView: View {
                 
                 Spacer()
                 
-                // Shared avatar overlay
+                // Shared avatar overlay (recipient: sharer; owner: people shared with)
                 if task.isShared {
                     SharedAvatarView(
                         currentUserProfile: currentUserProfile,
                         sharerProfile: sharerProfile
                     )
+                } else if !sharedWithProfiles.isEmpty {
+                    SharedAvatarView(recipientProfiles: sharedWithProfiles)
                 }
                 
                 if let onShare = onShare {
@@ -115,7 +119,7 @@ struct TaskRowView: View {
                 .buttonStyle(.plain)
             }
             .padding(.vertical, 8)
-            .padding(.leading, task.isShared ? 8 : 0)
+            .padding(.leading, (task.isShared || !sharedWithProfiles.isEmpty) ? 8 : 0)
         }
         .contentShape(Rectangle())
         .opacity(task.isCompleted ? 0.6 : 1.0)

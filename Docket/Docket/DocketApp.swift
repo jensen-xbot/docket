@@ -121,6 +121,8 @@ private struct AppContentView: View {
         networkMonitor.onReconnect = {
             _Concurrency.Task { @MainActor in
                 guard let syncEngine = syncEngine else { return }
+                // Pull first for faster consistency when network returns
+                await syncEngine.pullTasks()
                 // Flush pending queue when network reconnects
                 await syncEngine.pushPendingTasks()
                 await syncEngine.pushPendingGroceryStores()

@@ -127,11 +127,12 @@ Also ensure `Assets.xcassets` contains an `AppIcon.appiconset/Contents.json` (ev
 
 ---
 
-## Current State (2026-02-06)
+## Current State (2026-02-09)
 
 **Build Status:** ✅ COMPLETE  
-**Phase:** 1-4 All Done  
-**Next Step:** User testing in Xcode  
+**Phase:** 1-4 All Done; Sharing System V2 implemented  
+**Active Initiative:** Sharing System V2 — invite gating, notifications inbox, realtime sync  
+**Next Step:** Phased QA matrix (owner/recipient, online/offline/reconnect)  
 **Monitor:** Active, fast-exit mode
 
 ---

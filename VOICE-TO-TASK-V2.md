@@ -4,7 +4,7 @@
 
 Docket's voice assistant is a **conversational AI** — users speak naturally and the assistant talks back, asks for missing details, and confirms before saving. It adapts to how much context the user provides: say everything at once and it creates the task immediately; say just a title and it asks follow-up questions.
 
-The system transcribes speech on-device (Apple SFSpeechRecognizer), sends conversation history to a cloud AI (gpt-4.1-mini via Supabase Edge Function), and receives either a follow-up question or completed task(s). TTS (AVSpeechSynthesizer) reads responses aloud so the user can interact hands-free.
+The system transcribes speech on-device (Apple SFSpeechRecognizer), sends conversation history to a cloud AI (gpt-4.1-mini via Supabase Edge Function), and receives either a follow-up question or completed task(s). TTS reads responses aloud so the user can interact hands-free. The next evolution is a **personalization adaptation loop** that learns each user's words, expressions, and habits from corrections and editing patterns.
 
 ---
 
@@ -62,6 +62,36 @@ The system transcribes speech on-device (Apple SFSpeechRecognizer), sends conver
 - **Brief responses:** AI speaks 1-2 sentences max per turn (it's read aloud — long responses are annoying).
 - **Mic auto-restarts:** After TTS finishes speaking, the mic re-activates automatically so the user can respond hands-free.
 - **Visual + audio:** Every AI response appears as text AND is spoken via TTS. User can mute TTS in Settings.
+
+### Synchronized text + audio (v1.1 hotfix)
+Assistant responses use a **bounded-wait** flow so text and playback stay in sync when possible:
+- TTS audio is requested first; the UI shows "Thinking..." then "Preparing voice..." while the request is in flight.
+- If audio is ready within **750 ms**, the assistant bubble is revealed and playback starts together.
+- If not ready in time, the bubble is revealed immediately and "Preparing voice..." remains until playback starts.
+- TTS request has an **8 s** timeout; on failure or timeout the app falls back to Apple TTS.
+
+### Interruption policy
+- **`.began`** (e.g. phone call, Siri): recording is stopped; no auto-resume.
+- **`.ended`**: the view sets `shouldResumeAfterInterruption` when it is in the listening flow and not speaking. The speech manager resumes listening only when that flag is true, avoiding double-start or resume during TTS.
+
+### Latency-first intent routing
+To keep voice turns fast, Docket uses a hybrid split:
+- **Client-side (instant, deterministic):** UI/session control intents such as dismiss phrases, gratitude acknowledgments, mic/session handoffs, and rendering-state guardrails.
+- **Edge Function + model (network/AI):** semantic task understanding and extraction (`question`, `complete`, `update`, `delete`) from natural language.
+- **Rule of thumb:** if an intent can be resolved deterministically without AI, handle it locally and skip the parser round-trip.
+- **When to move server-side:** only for cross-platform policy consistency, analytics/A-B testing, or behavior changes that must ship without an app release.
+
+```mermaid
+flowchart LR
+    userSpeech["UserSpeech"] --> intentGate["IntentGate(client)"]
+    intentGate -->|"deterministic_control"| localFlow["LocalControlFlow"]
+    intentGate -->|"semantic_parse_needed"| edgeFn["SupabaseEdgeFunction"]
+    edgeFn --> modelCall["OpenRouterModel(gpt-4.1-mini)"]
+    modelCall --> edgeFn
+    edgeFn --> parseResult["ParseResult(question/complete/update/delete)"]
+    localFlow --> uiState["VoiceUIStateAndSession"]
+    parseResult --> uiState
+```
 
 ---
 
@@ -245,6 +275,38 @@ ALWAYS through server:
 2. Edge Function reads it via `Deno.env.get("OPENROUTER_API_KEY")`
 3. iOS app calls Edge Function via Supabase client (authenticated)
 4. No API keys ever touch the client
+
+---
+
+## Personalization Adaptation (v1.2 Direction)
+
+Personalization is the differentiator: the assistant should improve by learning user-specific wording, spelling, category habits, store names, and correction patterns over time.
+
+### Core Methodology
+
+1. **Observe corrections**  
+   Learn from explicit edits to voice-created tasks (title, notes, category, store, checklist items).
+2. **Store compact preferences**  
+   Save small, high-signal mappings (spoken alias -> canonical value, common phrase -> category hint, time preference by task type).
+3. **Inject only relevant context**  
+   Send a concise personalization block to `parse-voice-tasks` each turn (not full history dumps).
+4. **Respect privacy and control**  
+   Opt-in personalization, reset controls, and no raw transcript logging in analytics.
+
+### Guardrails (Important)
+
+- No voice biometrics in v1.2 (too sensitive + unnecessary for value)
+- No always-on wake words in v1.2 (permission and battery complexity)
+- Never store raw audio for learning
+- Keep personalization bounded (top N mappings by recency/frequency)
+- Ship behind feature flag + measure impact before scaling
+
+### Initial Personalization Scope (Recommended)
+
+- **Vocabulary correction:** "Krogers" -> "Kroger", company names, person names
+- **Category preference mapping:** AI guessed "Shopping", user consistently chooses "Groceries"
+- **Time habit hints:** meetings usually need explicit times; groceries usually date-only
+- **Store/item affinity:** recurring store aliases and common checklist bundles
 
 ---
 
@@ -548,6 +610,23 @@ server simple and avoids session management.
 7. Usage analytics
 **Deliverable:** Production-ready feature
 
+### Phase E: Reliability Hardening (Pre-TestFlight)
+1. Add timeout + abort logic to Edge Function model call
+2. Add per-user rate limiting for `parse-voice-tasks` and `text-to-speech`
+3. Add retry/backoff policy for transient speech/TTS/network failures
+4. Add explicit accessibility + reduce-motion QA pass on voice screens
+5. Add privacy checklist verification (no transcript leakage in analytics/logs)
+**Deliverable:** Stable and abuse-resistant voice pipeline
+
+### Phase F: Personalization Foundation (v1.2)
+1. Add `TaskSource` metadata and capture snapshots for edits to voice-created tasks
+2. Create `user_voice_profiles` storage (aliases, category mappings, time habits, store/item preferences)
+3. Build `record-corrections` ingestion endpoint with dedup + ranking
+4. Inject compact personalization context into `parse-voice-tasks` prompt
+5. Add user-facing controls: personalization on/off + reset learned data
+6. Measure outcome metrics (fewer user edits, faster confirmation, higher auto-accept rate)
+**Deliverable:** Assistant that adapts to user language and habits safely
+
 ---
 
 ## Prerequisites
@@ -565,16 +644,17 @@ Before starting this feature:
 | Component | Usage (per user/month) | Cost |
 |-----------|----------------------|------|
 | Apple Speech | Unlimited | Free |
-| AVSpeechSynthesizer (TTS) | Unlimited | Free (on-device) |
+| OpenAI TTS (primary) | ~150 responses | ~$0.20-0.30 |
+| AVSpeechSynthesizer (fallback) | Fallback only | Free (on-device) |
 | OpenRouter (gpt-4.1-mini) | ~150 calls (~50 tasks × ~3 turns avg) | ~$0.08 |
 | Supabase Edge Functions | ~150 invocations | Free tier |
-| **Total per user** | | **~$0.08/month** |
-| **100 users** | | **~$8/month** |
+| **Total per user** | | **~$0.30-0.45/month** |
+| **100 users** | | **~$30-45/month** |
 
 Conversational adds ~2-3x more API calls vs single-shot (follow-up questions),
 but still very cheap because:
 - Speech is on-device (no Whisper costs)
-- TTS is on-device via AVSpeechSynthesizer (no cloud TTS costs)
+- OpenAI TTS provides premium quality; AVSpeechSynthesizer remains free fallback
 - Only sending text to AI (not audio)
 - gpt-4.1-mini is cheap for chat completion
 - Power users who say everything at once use only 1 call (same as single-shot)
@@ -600,8 +680,11 @@ but still very cheap because:
 
 1. **Offline fallback?** If no internet, should we save raw transcription as a single task (no AI parsing)?
 2. **Contact resolution:** Should the app send the user's contacts list to the Edge Function, or resolve names client-side after parsing?
-3. **Conversation timeout:** How long to wait with no speech before auto-canceling? (Suggested: 30 seconds)
+3. **Conversation timeout:** How long to wait with no speech before auto-canceling? (Suggested: 30-60 seconds)
+4. **Personalization consent:** Default on after onboarding, or explicit in-app opt-in?
+5. **Retention policy:** How long should learned aliases/patterns be kept without reuse?
+6. **Personalization scope for v1.2:** Which dimensions ship first (vocabulary/category/store/time) vs later (priority/recurrence/sharing defaults)?
 
 ---
 
-*Architecture documented 2026-02-06 — Updated 2026-02-08 with conversational AI, notes, sharing, TTS, model update*
+*Architecture documented 2026-02-06 — Updated 2026-02-10 with reliability hardening and personalization adaptation roadmap*

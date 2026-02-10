@@ -61,7 +61,7 @@ docket/
 - Priorities with visual indicators
 - Pin + manual reorder
 - Grocery/Shopping templates + checklists
-- Task sharing (email + text invite flow, auto-accept)
+- Task sharing (email + text invite flow; invite-gated for new contacts, immediate for accepted; bilateral edits)
 - Profile hub (templates, notifications, contacts)
 - Branded splash screen with auth session check
 - Inline edit mode for categories and stores (rename, delete, customize)
@@ -75,6 +75,13 @@ docket/
 - Voice grocery list management (templates + ad-hoc items)
 - Real-time audio level visualization
 - Post-save corrections ("actually make it high priority")
+- Sharing System V2: invite accept/decline, notification bell + inbox, realtime sync
+
+### v1.2 (Planned)
+- Personalization adaptation loop (learn from user corrections)
+- Vocabulary aliases (names, companies, store spelling)
+- Category/store/time habit learning with privacy controls
+- Personalization reset + opt-in settings
 
 ## Getting Started
 

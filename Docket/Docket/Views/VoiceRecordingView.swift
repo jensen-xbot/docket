@@ -2,6 +2,15 @@ import SwiftUI
 import SwiftData
 import _Concurrency
 
+#if DEBUG
+private enum VoiceTrace {
+    static func trace(_ event: String) {
+        let t = String(format: "%.3f", Date().timeIntervalSince1970)
+        print("[VoiceTrace][\(t)] \(event)")
+    }
+}
+#endif
+
 enum VoiceRecordingState {
     case idle
     case listening
@@ -40,7 +49,11 @@ struct VoiceRecordingView: View {
         var result = messages.enumerated().map { index, msg in
             DisplayMessage(id: "msg-\(index)", message: msg)
         }
-        if state == .listening && !speechManager.transcribedText.isEmpty && !isProcessingUtterance {
+        // Show live transcript until commit: same ID as next message so SwiftUI
+        // treats it as one view (no flicker). Keep showing during .processing too (we set
+        // state = .processing at start of stopRecording to show "Thinking..." early);
+        // transcribedText is only cleared after we append, so bubble stays until commit.
+        if (state == .listening || state == .processing) && !speechManager.transcribedText.isEmpty {
             result.append(DisplayMessage(
                 id: "msg-\(messages.count)",
                 message: ConversationMessage(role: "user", content: speechManager.transcribedText)
@@ -50,93 +63,52 @@ struct VoiceRecordingView: View {
     }
     
     var body: some View {
-        ZStack {
-            Color(.systemBackground)
-                .ignoresSafeArea()
-            
-            VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                    .foregroundStyle(.secondary)
-                    
-                    Spacer()
-                    
-                    Text("Voice Task")
-                        .font(.headline)
-                    
-                    Spacer()
-                    
-                    // Placeholder for future actions
-                    Color.clear
-                        .frame(width: 60)
-                }
-                .padding(.horizontal)
-                .padding(.vertical, 10)
+        NavigationStack {
+            ZStack {
+                Color(.systemGroupedBackground)
+                    .ignoresSafeArea()
                 
-                // Conversation history
-                GeometryReader { geometry in
+                VStack(spacing: 0) {
+                    GeometryReader { geometry in
                     ScrollViewReader { scrollProxy in
                         ScrollView {
-                            VStack(spacing: 12) {
-                                // Unified message list: committed messages + live transcription
-                                // share the same ID scheme so SwiftUI sees one continuous view
-                                // (no disappear/reappear flash on commit)
-                                ForEach(Array(displayMessages.enumerated()), id: \.element.id) { _, entry in
-                                    MessageBubble(message: entry.message)
-                                        .id(entry.id)
-                                }
-                                
-                                // Processing indicator with animation
-                                if state == .processing {
-                                    HStack(spacing: 8) {
-                                        HStack(spacing: 4) {
-                                            ForEach(0..<3) { index in
-                                                Circle()
-                                                    .fill(Color.blue)
-                                                    .frame(width: 8, height: 8)
-                                                    .opacity(0.3)
-                                                    .scaleEffect(state == .processing ? 1.0 : 0.5)
-                                                    .animation(
-                                                        .easeInOut(duration: 0.6)
-                                                            .repeatForever()
-                                                            .delay(Double(index) * 0.2),
-                                                        value: state == .processing
-                                                    )
-                                            }
-                                        }
-                                        Text("Processing...")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
+                            VStack(spacing: 0) {
+                                Spacer(minLength: 0)
+                                VStack(spacing: 12) {
+                                    // Unified message list: committed messages + live transcription
+                                    // share the same ID scheme so SwiftUI sees one continuous view
+                                    // (no disappear/reappear flash on commit)
+                                    ForEach(Array(displayMessages.enumerated()), id: \.element.id) { _, entry in
+                                        MessageBubble(message: entry.message)
+                                            .id(entry.id)
                                     }
-                                    .padding()
-                                    .id("processing")
-                                }
-                                
-                                // TTS generating indicator (when OpenAI TTS is loading)
-                                if state == .speaking && ttsManager.isGeneratingTTS {
-                                    HStack(spacing: 8) {
-                                        ProgressView()
-                                            .scaleEffect(0.8)
-                                        Text("Preparing voice...")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
+                                    
+                                    // Processing indicator with animation
+                                    if state == .processing {
+                                        AIThinkingIndicator(label: "Thinking...")
+                                            .padding(.vertical, 4)
+                                            .id("processing")
                                     }
-                                    .padding()
-                                    .id("tts-loading")
+                                    
+                                    // TTS generating indicator (when OpenAI TTS is loading)
+                                    if state == .speaking && ttsManager.isGeneratingTTS {
+                                        AIThinkingIndicator(label: "Preparing voice...")
+                                            .padding(.vertical, 4)
+                                            .id("tts-loading")
+                                    }
+                                    
+                                    // Scroll anchor
+                                    Color.clear
+                                        .frame(height: 1)
+                                        .id("bottom")
                                 }
-                                
-                                // Scroll anchor
-                                Color.clear
-                                    .frame(height: 1)
-                                    .id("bottom")
+                                .padding(.horizontal)
+                                .padding(.top, 8)
+                                .padding(.bottom, 8)
                             }
-                            .padding(.horizontal)
-                            .frame(maxWidth: .infinity)
                             .frame(minHeight: geometry.size.height, alignment: .bottom)
                         }
+                        .safeAreaPadding(.top, 0)
                         .onChange(of: messages.count) { _, _ in
                             // Deferred scroll so the new message layout commits
                             // WITHOUT animation, then we scroll smoothly
@@ -156,6 +128,7 @@ struct VoiceRecordingView: View {
                         }
                     }
                 }
+                .frame(maxHeight: .infinity)
                 
                 // Mic button
                 VStack(spacing: 12) {
@@ -229,6 +202,14 @@ struct VoiceRecordingView: View {
                     Spacer()
                 }
             }
+            }
+            .navigationTitle("Voice Task")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+            }
         }
         .onAppear {
             _Concurrency.Task {
@@ -237,8 +218,12 @@ struct VoiceRecordingView: View {
                     errorMessage = speechManager.errorMessage ?? "Microphone and speech recognition permissions are required."
                 }
             }
+            updateInterruptionResumeIntent()
         }
+        .onChange(of: state) { _, _ in updateInterruptionResumeIntent() }
+        .onChange(of: ttsManager.isSpeaking) { _, _ in updateInterruptionResumeIntent() }
         .onDisappear {
+            speechManager.shouldResumeAfterInterruption = false
             cancelConversationTimeout()
             ttsManager.stop()
             _Concurrency.Task {
@@ -278,6 +263,9 @@ struct VoiceRecordingView: View {
     }
     
     private func startRecording() async {
+        #if DEBUG
+        VoiceTrace.trace("startRecording")
+        #endif
         state = .listening
         errorMessage = nil
         
@@ -314,9 +302,25 @@ struct VoiceRecordingView: View {
         conversationTimeoutTask = nil
     }
     
+    /// View-driven intent for interruption recovery: resume listening after .ended only when we were in listening flow and not speaking.
+    private func updateInterruptionResumeIntent() {
+        let shouldResume = (state == .listening && !ttsManager.isSpeaking && !isProcessingUtterance)
+        speechManager.shouldResumeAfterInterruption = shouldResume
+    }
+    
     private func stopRecording() async {
-        guard !isProcessingUtterance else { return }
+        guard !isProcessingUtterance else {
+            #if DEBUG
+            VoiceTrace.trace("stopRecording skipped (re-entry)")
+            #endif
+            return
+        }
         isProcessingUtterance = true
+        // Show "Thinking..." immediately when user stops (silence or tap) so perceived delay is minimal
+        state = .processing
+        #if DEBUG
+        VoiceTrace.trace("stopRecording entry")
+        #endif
         
         await speechManager.stopRecording()
         
@@ -335,7 +339,7 @@ struct VoiceRecordingView: View {
             }
         }
         
-        // Check for empty transcription
+        // Check for empty transcription (clear "Thinking..." we set at stopRecording entry)
         guard !text.isEmpty else {
             state = .idle
             isProcessingUtterance = false
@@ -345,8 +349,14 @@ struct VoiceRecordingView: View {
         
         // Commit user message immediately — the live transcription bubble
         // transitions seamlessly into a permanent message (no flicker)
+        #if DEBUG
+        VoiceTrace.trace("message append count=\(messages.count + 1)")
+        #endif
         messages.append(ConversationMessage(role: "user", content: text))
         speechManager.transcribedText = ""
+        #if DEBUG
+        VoiceTrace.trace("transcribedText cleared")
+        #endif
         
         // Check if this is a confirmation after tasks are ready
         if !parsedTasks.isEmpty {
@@ -372,9 +382,30 @@ struct VoiceRecordingView: View {
             return
         }
         
+        // Friendly conversational shortcut: acknowledge gratitude without sending
+        // an unnecessary parser turn when user is simply closing politely.
+        if parsedTasks.isEmpty && isGratitude(text) {
+            let followUp = "You're welcome. Will this be all?"
+            isProcessingUtterance = false
+            ttsManager.speakWithBoundedSync(text: followUp, boundedWait: 0.75, onTextReveal: { [self] in
+                messages.append(ConversationMessage(role: "assistant", content: followUp))
+                state = .speaking
+            }, onFinish: { [self] in
+                state = .listening
+                _Concurrency.Task { await speechManager.startRecording() }
+            })
+            return
+        }
+        
         // Normal flow - send to parser and handle response
+        #if DEBUG
+        VoiceTrace.trace("state -> processing, handleUserUtterance")
+        #endif
         await handleUserUtterance(text)
         isProcessingUtterance = false
+        #if DEBUG
+        VoiceTrace.trace("stopRecording exit")
+        #endif
     }
     
     private func speakError(_ message: String) async {
@@ -409,8 +440,23 @@ struct VoiceRecordingView: View {
     }
     
     private func isDismissal(_ text: String) -> Bool {
-        let dismissals = ["no", "nope", "no thanks", "that's all", "that's it", "i'm done", "i'm good", "nothing", "all done", "all good"]
+        let dismissals = [
+            "no", "nope", "no thanks",
+            "that's all", "that's it",
+            "i'm done", "i'm good",
+            "nothing", "all done", "all good",
+            "bye", "goodbye", "see you", "talk to you later"
+        ]
         return matchesPhrase(text, phrases: dismissals)
+    }
+    
+    private func isGratitude(_ text: String) -> Bool {
+        let gratitude = [
+            "thanks", "thank you",
+            "thanks a lot", "thank you very much",
+            "appreciate it", "much appreciated"
+        ]
+        return matchesPhrase(text, phrases: gratitude)
     }
     
     /// Builds TaskContext array from active tasks (capped at 50 for context window)
@@ -475,6 +521,9 @@ struct VoiceRecordingView: View {
         }
         
         // User message already committed in stopRecording() for seamless transition
+        #if DEBUG
+        VoiceTrace.trace("state -> processing")
+        #endif
         state = .processing
         errorMessage = nil
         
@@ -508,32 +557,26 @@ struct VoiceRecordingView: View {
                 }
                 
                 if let summary = response.summary {
-                    state = .speaking
-                    messages.append(ConversationMessage(role: "assistant", content: summary))
-                    
-                    // Corrections always go through updateSavedTasks — regardless of "?"
-                    if isCorrection {
-                        print("[Voice] → correction path")
-                        ttsManager.speak(summary) { [self] in
+                    #if DEBUG
+                    VoiceTrace.trace("state -> speaking (complete)")
+                    #endif
+                    let needsConfirmation = summary.contains("?")
+                    ttsManager.speakWithBoundedSync(text: summary, boundedWait: 0.75, onTextReveal: { [self] in
+                        state = .speaking
+                        messages.append(ConversationMessage(role: "assistant", content: summary))
+                    }, onFinish: { [self] in
+                        if isCorrection {
                             updateSavedTasks(with: parsedTasks)
+                        } else if parsedTasks.isEmpty {
+                            state = .listening
+                            _Concurrency.Task { await speechManager.startRecording() }
+                        } else if needsConfirmation {
+                            state = .listening
+                            _Concurrency.Task { await speechManager.startRecording() }
+                        } else {
+                            saveTasks(parsedTasks)
                         }
-                    } else {
-                        // Check if the AI is asking for confirmation or just doing it.
-                        let needsConfirmation = summary.contains("?")
-                        
-                        ttsManager.speak(summary) { [self] in
-                            if needsConfirmation {
-                                // AI asked a question — listen for "yes"/"no"
-                                state = .listening
-                                _Concurrency.Task {
-                                    await speechManager.startRecording()
-                                }
-                            } else {
-                                // AI is confirming it's done — save immediately
-                                saveTasks(parsedTasks)
-                            }
-                        }
-                    }
+                    })
                 } else {
                     if isCorrection {
                         updateSavedTasks(with: parsedTasks)
@@ -545,14 +588,13 @@ struct VoiceRecordingView: View {
                 }
             } else {
                 let question = response.text ?? ""
-                messages.append(ConversationMessage(role: "assistant", content: question))
-                state = .speaking
-                ttsManager.speak(question) {
+                ttsManager.speakWithBoundedSync(text: question, boundedWait: 0.75, onTextReveal: { [self] in
+                    messages.append(ConversationMessage(role: "assistant", content: question))
+                    state = .speaking
+                }, onFinish: { [self] in
                     state = .listening
-                    _Concurrency.Task {
-                        await speechManager.startRecording()
-                    }
-                }
+                    _Concurrency.Task { await speechManager.startRecording() }
+                })
             }
         } catch {
             // Error haptic
@@ -568,6 +610,18 @@ struct VoiceRecordingView: View {
     
     private func saveTasks(_ tasks: [ParsedTask]) {
         cancelConversationTimeout()
+        
+        guard !tasks.isEmpty else {
+            let followUp = "Got it. Anything else?"
+            ttsManager.speakWithBoundedSync(text: followUp, boundedWait: 0.75, onTextReveal: { [self] in
+                messages.append(ConversationMessage(role: "assistant", content: followUp))
+                state = .speaking
+            }, onFinish: { [self] in
+                state = .listening
+                _Concurrency.Task { await speechManager.startRecording() }
+            })
+            return
+        }
         
         // Haptic feedback for success
         let generator = UINotificationFeedbackGenerator()
@@ -664,15 +718,13 @@ struct VoiceRecordingView: View {
             // Ask if the user wants to add more tasks
             let taskCount = tasks.count
             let followUp = taskCount == 1 ? "Done! Anything else?" : "All \(taskCount) added! Anything else?"
-            messages.append(ConversationMessage(role: "assistant", content: followUp))
-            state = .speaking
-            ttsManager.speak(followUp) { [self] in
-                // Listen for next task or dismissal
+            ttsManager.speakWithBoundedSync(text: followUp, boundedWait: 0.75, onTextReveal: { [self] in
+                messages.append(ConversationMessage(role: "assistant", content: followUp))
+                state = .speaking
+            }, onFinish: { [self] in
                 state = .listening
-                _Concurrency.Task {
-                    await speechManager.startRecording()
-                }
-            }
+                _Concurrency.Task { await speechManager.startRecording() }
+            })
         }
     }
     
@@ -745,14 +797,13 @@ struct VoiceRecordingView: View {
             
             // Confirm and ask for more
             let followUp = "Updated! Anything else?"
-            messages.append(ConversationMessage(role: "assistant", content: followUp))
-            state = .speaking
-            ttsManager.speak(followUp) { [self] in
+            ttsManager.speakWithBoundedSync(text: followUp, boundedWait: 0.75, onTextReveal: { [self] in
+                messages.append(ConversationMessage(role: "assistant", content: followUp))
+                state = .speaking
+            }, onFinish: { [self] in
                 state = .listening
-                _Concurrency.Task {
-                    await speechManager.startRecording()
-                }
-            }
+                _Concurrency.Task { await speechManager.startRecording() }
+            })
         }
     }
     
@@ -1039,22 +1090,18 @@ struct VoiceRecordingView: View {
         
         // TTS readback
         if let summary = response.summary {
-            state = .speaking
-            messages.append(ConversationMessage(role: "assistant", content: summary))
-            ttsManager.speak(summary) { [self] in
+            ttsManager.speakWithBoundedSync(text: summary, boundedWait: 0.75, onTextReveal: { [self] in
+                messages.append(ConversationMessage(role: "assistant", content: summary))
+                state = .speaking
+            }, onFinish: { [self] in
                 startConversationTimeout()
                 state = .listening
-                _Concurrency.Task {
-                    await speechManager.startRecording()
-                }
-            }
+                _Concurrency.Task { await speechManager.startRecording() }
+            })
         } else {
-            // No summary - just continue
             startConversationTimeout()
             state = .listening
-            _Concurrency.Task {
-                await speechManager.startRecording()
-            }
+            _Concurrency.Task { await speechManager.startRecording() }
         }
     }
     
@@ -1098,23 +1145,53 @@ struct VoiceRecordingView: View {
         
         // TTS readback
         if let summary = response.summary {
-            state = .speaking
-            messages.append(ConversationMessage(role: "assistant", content: summary))
-            ttsManager.speak(summary) { [self] in
+            ttsManager.speakWithBoundedSync(text: summary, boundedWait: 0.75, onTextReveal: { [self] in
+                messages.append(ConversationMessage(role: "assistant", content: summary))
+                state = .speaking
+            }, onFinish: { [self] in
                 startConversationTimeout()
                 state = .listening
-                _Concurrency.Task {
-                    await speechManager.startRecording()
-                }
-            }
+                _Concurrency.Task { await speechManager.startRecording() }
+            })
         } else {
-            // No summary - just continue
             startConversationTimeout()
             state = .listening
-            _Concurrency.Task {
-                await speechManager.startRecording()
-            }
+            _Concurrency.Task { await speechManager.startRecording() }
         }
+    }
+}
+
+struct AIThinkingIndicator: View {
+    let label: String
+    @State private var isAnimating = false
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 6) {
+                ForEach(0..<3, id: \.self) { index in
+                    Circle()
+                        .fill(Color.blue)
+                        .frame(width: 8, height: 8)
+                        .opacity(isAnimating ? 1.0 : 0.25)
+                        .scaleEffect(isAnimating ? 1.0 : 0.7)
+                        .animation(
+                            .easeInOut(duration: 0.55)
+                                .repeatForever(autoreverses: true)
+                                .delay(Double(index) * 0.14),
+                            value: isAnimating
+                        )
+                }
+            }
+            Text(label)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(Color(.systemGray6))
+        .clipShape(Capsule())
+        .onAppear { isAnimating = true }
+        .onDisappear { isAnimating = false }
     }
 }
 

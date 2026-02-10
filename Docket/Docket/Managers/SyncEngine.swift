@@ -14,6 +14,8 @@ class SyncEngine {
     var lastSyncDate: Date?
     var syncError: String?
     var sharerProfiles: [String: UserProfile] = [:]
+    /// Per-task recipient profiles for owner-side "shared with" visibility (taskId -> [UserProfile]).
+    var sharedWithProfiles: [UUID: [UserProfile]] = [:]
     private var didSubscribe = false
     
     init(modelContext: ModelContext, networkMonitor: NetworkMonitor? = nil) {
@@ -153,6 +155,8 @@ class SyncEngine {
             
             // Fetch sharer profiles for shared tasks
             await fetchSharerProfiles(userId: userId)
+            // Fetch recipient profiles for owner-side "shared with" visibility
+            await fetchSharedWithProfiles(userId: userId)
             
             lastSyncDate = Date()
         } catch {
@@ -193,6 +197,53 @@ class SyncEngine {
             }
         } catch {
             print("Error fetching sharer profiles: \(error)")
+        }
+    }
+    
+    // Fetch recipient profiles for tasks the current user owns and has shared
+    private func fetchSharedWithProfiles(userId: String) async {
+        do {
+            struct OwnerShareRow: Codable {
+                let taskId: UUID
+                let sharedWithId: UUID?
+                enum CodingKeys: String, CodingKey {
+                    case taskId = "task_id"
+                    case sharedWithId = "shared_with_id"
+                }
+            }
+            let shares: [OwnerShareRow] = try await supabase
+                .from("task_shares")
+                .select("task_id, shared_with_id")
+                .eq("owner_id", value: userId)
+                .eq("status", value: "accepted")
+                .execute()
+                .value
+            
+            let recipientIds = shares.compactMap { $0.sharedWithId }.map { $0.uuidString }
+            guard !recipientIds.isEmpty else {
+                sharedWithProfiles = [:]
+                return
+            }
+            
+            let profiles: [UserProfile] = try await supabase
+                .from("user_profiles")
+                .select()
+                .in("id", values: recipientIds)
+                .execute()
+                .value
+            
+            let profileById: [String: UserProfile] = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id.uuidString, $0) })
+            var result: [UUID: [UserProfile]] = [:]
+            for share in shares {
+                guard let sid = share.sharedWithId else { continue }
+                let idStr = sid.uuidString
+                if let profile = profileById[idStr] {
+                    result[share.taskId, default: []].append(profile)
+                }
+            }
+            sharedWithProfiles = result
+        } catch {
+            print("Error fetching shared-with profiles: \(error)")
         }
     }
     
@@ -475,10 +526,39 @@ class SyncEngine {
         await subscribeToSharedTasks()
     }
     
+    private var tasksChannel: RealtimeChannelV2?
+    private var taskSharesChannel: RealtimeChannelV2?
+    
     func subscribeToSharedTasks() async {
-        guard !didSubscribe else { return }
+        guard !didSubscribe, isNetworkAvailable else { return }
         didSubscribe = true
-        // Placeholder for realtime subscriptions; keep sync polling for now.
+        
+        do {
+            let session = try await supabase.auth.session
+            let userId = session.user.id.uuidString
+            
+            // Subscribe to owned tasks (user_id = current user)
+            let tasksCh = supabase.channel("tasks-\(userId)")
+            tasksCh.onPostgresChange(AnyAction.self, schema: "public", table: "tasks", filter: "user_id=eq.\(userId)") { [weak self] _ in
+                _Concurrency.Task { @MainActor in
+                    await self?.pullTasks()
+                }
+            }
+            tasksChannel = tasksCh
+            try await tasksCh.subscribeWithError()
+            
+            // Subscribe to task_shares where we're the recipient (shared_with_id = current user)
+            let sharesCh = supabase.channel("task-shares-\(userId)")
+            sharesCh.onPostgresChange(AnyAction.self, schema: "public", table: "task_shares", filter: "shared_with_id=eq.\(userId)") { [weak self] _ in
+                _Concurrency.Task { @MainActor in
+                    await self?.pullTasks()
+                }
+            }
+            taskSharesChannel = sharesCh
+            try await sharesCh.subscribeWithError()
+        } catch {
+            print("Realtime subscribe error: \(error)")
+        }
     }
     
     // Remove a shared task from current user's list (deletes the share, not the task)

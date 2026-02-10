@@ -10,6 +10,8 @@ class PushNotificationManager: NSObject, UNUserNotificationCenterDelegate, UIApp
     
     private let supabase = SupabaseConfig.client
     var pendingTaskNavigation: UUID?
+    /// When true, open Contacts/Invites (e.g. from invite push notification)
+    var pendingInviteView = false
     
     /// Must be nonisolated so @UIApplicationDelegateAdaptor can instantiate
     /// this class without triggering a @MainActor dispatch assertion in Swift 6.
@@ -118,8 +120,13 @@ class PushNotificationManager: NSObject, UNUserNotificationCenterDelegate, UIApp
     ) {
         let userInfo = response.notification.request.content.userInfo
         
-        // Extract task_id from custom payload
-        if let taskIdString = userInfo["task_id"] as? String,
+        // Route by type: task_share_invite -> Contacts/Invites; task_id -> open task
+        if let type = userInfo["type"] as? String, type == "task_share_invite" {
+            _Concurrency.Task { @MainActor in
+                PushNotificationManager.shared.pendingInviteView = true
+                NotificationCenter.default.post(name: NSNotification.Name("PendingInviteView"), object: nil)
+            }
+        } else if let taskIdString = userInfo["task_id"] as? String,
            let taskId = UUID(uuidString: taskIdString) {
             _Concurrency.Task { @MainActor in
                 PushNotificationManager.shared.pendingTaskNavigation = taskId

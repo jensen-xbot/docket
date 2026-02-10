@@ -63,6 +63,8 @@ struct TaskListView: View {
     @State private var taskToShare: Task?
     @State private var currentUserProfile: UserProfile?
     @State private var pendingTaskId: UUID?
+    @State private var showContactsForInvite = false
+    @State private var unreadNotificationCount = 0
     
     private var filteredTasks: [Task] {
         viewModel.filteredTasks(from: allTasks)
@@ -82,8 +84,16 @@ struct TaskListView: View {
             mainContent
                 .navigationTitle("Docket")
                 .toolbar { toolbarContent }
-                .refreshable { await syncAll() }
+                .refreshable {
+                    await syncAll()
+                    await loadUnreadNotificationCount()
+                }
                 .onAppear(perform: onViewAppear)
+                .onChange(of: taskToShare) { _, newValue in
+                    if newValue == nil {
+                        _Concurrency.Task { await syncAll() }
+                    }
+                }
                 .onChange(of: pendingTaskId) { _, taskId in
                     handlePendingTaskNavigation(taskId)
                 }
@@ -92,10 +102,31 @@ struct TaskListView: View {
                         pendingTaskId = taskId
                     }
                 }
+                .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PendingInviteView"))) { _ in
+                    showContactsForInvite = true
+                }
+                .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NotificationsViewDismissed"))) { _ in
+                    _Concurrency.Task { await loadUnreadNotificationCount() }
+                }
                 .fullScreenCover(isPresented: $showingAddTask) { AddTaskView() }
-                .fullScreenCover(isPresented: $showingVoiceRecording) { VoiceRecordingView() }
+                .sheet(isPresented: $showingVoiceRecording) { VoiceRecordingView() }
                 .fullScreenCover(item: $taskToEdit) { task in EditTaskView(task: task) }
                 .sheet(item: $taskToShare) { task in ShareTaskView(task: task) }
+                .fullScreenCover(isPresented: $showContactsForInvite) {
+                    NavigationStack {
+                        ContactsListView()
+                            .toolbar {
+                                ToolbarItem(placement: .cancellationAction) {
+                                    Button("Done") {
+                                        showContactsForInvite = false
+                                        PushNotificationManager.shared.pendingInviteView = false
+                                    }
+                                }
+                            }
+                    }
+                    .environment(syncEngine)
+                    .environment(networkMonitor)
+                }
                 .safeAreaInset(edge: .bottom) {
                     if !networkMonitor.isConnected || pendingCount > 0 {
                         offlinePendingBanner
@@ -181,6 +212,26 @@ struct TaskListView: View {
                     .scaleEffect(0.8)
             }
             
+            NavigationLink {
+                NotificationsListView()
+                    .environment(syncEngine)
+                    .environment(networkMonitor)
+            } label: {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "bell")
+                    if unreadNotificationCount > 0 {
+                        Text("\(min(unreadNotificationCount, 99))")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.white)
+                            .padding(4)
+                            .background(Color.red)
+                            .clipShape(Circle())
+                            .offset(x: 8, y: -8)
+                    }
+                }
+            }
+            
             if let authManager = authManager {
                 NavigationLink {
                     ProfileView(authManager: authManager)
@@ -207,6 +258,7 @@ struct TaskListView: View {
         _Concurrency.Task {
             await syncAll()
             await loadCurrentUserProfile()
+            await loadUnreadNotificationCount()
         }
     }
     
@@ -287,12 +339,14 @@ struct TaskListView: View {
     
     private func taskRow(for task: Task) -> some View {
         let profile: UserProfile? = task.isShared ? syncEngine.sharerProfiles[task.userId ?? ""] : nil
+        let sharedWith: [UserProfile] = task.isShared ? [] : (syncEngine.sharedWithProfiles[task.id] ?? [])
         return TaskRowView(
             task: task,
             syncEngine: syncEngine,
             onShare: { taskToShare = task },
             currentUserProfile: currentUserProfile,
-            sharerProfile: profile
+            sharerProfile: profile,
+            sharedWithProfiles: sharedWith
         )
         .contentShape(Rectangle())
         .onTapGesture { taskToEdit = task }
@@ -373,6 +427,31 @@ struct TaskListView: View {
             currentUserProfile = profiles.first
         } catch {
             print("Error loading current user profile: \(error)")
+        }
+    }
+    
+    private func loadUnreadNotificationCount() async {
+        do {
+            let session = try await SupabaseConfig.client.auth.session
+            let userId = session.user.id.uuidString
+            
+            struct NotifRow: Codable {
+                let id: UUID
+                let readAt: Date?
+                enum CodingKeys: String, CodingKey { case id; case readAt = "read_at" }
+            }
+            let rows: [NotifRow] = try await SupabaseConfig.client
+                .from("notifications")
+                .select("id, read_at")
+                .eq("user_id", value: userId)
+                .order("created_at", ascending: false)
+                .limit(50)
+                .execute()
+                .value
+            
+            unreadNotificationCount = rows.filter { $0.readAt == nil }.count
+        } catch {
+            unreadNotificationCount = 0
         }
     }
     
