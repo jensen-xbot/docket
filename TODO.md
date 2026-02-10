@@ -255,7 +255,7 @@
 - **Dependencies:** Zero new installs (all Apple frameworks + Deno fetch)
 - **Cost estimate:** ~$8/month @ 100 users (avg 3 turns per task) + ~$15/month for Whisper @ 100 users (5 tasks/day)
 - **Edge Function auth:** verify_jwt disabled at gateway; function validates via getUser() (Swift SDK JWT format incompatible with gateway's strict check)
-- **Silence detection:** Adaptive timeout — 2.5s for short responses, 3.5s for ongoing dictation
+- **Silence detection:** Adaptive timeout — 2.2s baseline, 2.8s for ongoing dictation
 - **Error handling:** Network checks, empty transcription detection, AI failure recovery with TTS feedback
 - **Loading states:** Animated processing indicators, pulsing mic button
 - **Haptics:** Light impact on start recording, success notification on task save, error notification on failures

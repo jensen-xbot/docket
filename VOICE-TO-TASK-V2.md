@@ -127,11 +127,16 @@ flowchart LR
 │      Supabase Edge Function                  │
 │      "parse-voice-tasks"                     │
 │                                              │
-│  Receives: { messages[], today, timezone }   │
+│  Receives: { messages[], today, timezone,     │
+│             existingTasks[], groceryStores[] }│
 │  Forwards to OpenRouter (gpt-4.1-mini)       │
 │  Returns one of:                             │
 │    → { type: "question", text: "..." }       │
 │    → { type: "complete", tasks: [...],       │
+│        summary: "..." }                      │
+│    → { type: "update", taskId: "...",        │
+│        changes: {...}, summary: "..." }      │
+│    → { type: "delete", taskId: "...",        │
 │        summary: "..." }                      │
 └────────────┬────────────────────────────────┘
              │ JSON response
@@ -153,6 +158,16 @@ flowchart LR
 │  │   → User confirms (voice or tap)       │  │
 │  │   → Save to SwiftData → sync           │  │
 │  │   → Resolve shares if needed           │  │
+│  │                                        │  │
+│  │ if type == "update":                   │  │
+│  │   → Match task by taskId in SwiftData  │  │
+│  │   → Apply changes (title/date/etc.)    │  │
+│  │   → TTS speaks summary                 │  │
+│  │   → Sync updated task                  │  │
+│  │                                        │  │
+│  │ if type == "delete":                   │  │
+│  │   → Match task by taskId in SwiftData  │  │
+│  │   → Delete task + TTS confirmation     │  │
 │  └────────────────────────────────────────┘  │
 └──────────────────────────────────────────────┘
 ```
@@ -461,12 +476,14 @@ Turn 3:
 - Handles permissions (microphone + speech recognition)
 
 ### TTSManager
-- Wraps `AVSpeechSynthesizer` (on-device, free)
+- **Primary:** OpenAI TTS API (natural voices — nova, alloy, echo, etc.)
+- **Fallback:** Apple AVSpeechSynthesizer (on-device, free)
 - `@Observable` for SwiftUI binding
 - Properties: `isSpeaking`
 - Methods: `speak(_ text: String)`, `stop()`
+- Bounded-wait flow: request TTS audio, show bubble if ready within 750ms, fallback after 8s timeout
 - Uses the AI-generated `summary` field for natural readback
-- Respects system voice/language settings
+- Voice selectable in Profile settings (6 OpenAI voices)
 - Can be muted via user preference (Settings toggle)
 
 ### VoiceRecordingView
@@ -492,7 +509,8 @@ Turn 3:
 - Calls Supabase Edge Function with full `messages` array (not single text)
 - Sends messages + today's date + timezone + contacts list
 - Receives either a follow-up question or completed tasks
-- Returns `ParseResponse` (type: "question" or "complete")
+- Also sends `existingTasks` (TaskContext[]) and `groceryStores` (GroceryStoreContext[]) for task awareness
+- Returns `ParseResponse` (type: "question", "complete", "update", or "delete")
 - Error handling (network, parse failures, rate limits)
 
 ### ParsedTask Model
@@ -501,11 +519,14 @@ struct ParsedTask: Codable, Identifiable {
     let id: UUID  // generated client-side
     var title: String
     var dueDate: Date?
-    var priority: String  // "low", "medium", "high"
+    var hasTime: Bool       // true if AI returned HH:mm, false if date-only
+    var priority: String    // "low", "medium", "high"
     var category: String?
     var notes: String?
     var shareWith: String?  // email or display name
     var suggestion: String?
+    var checklistItems: [String]?  // AI-suggested item names (ad-hoc grocery list)
+    var useTemplate: String?       // store name whose template to load
 }
 
 struct ConversationMessage: Codable {
@@ -514,10 +535,30 @@ struct ConversationMessage: Codable {
 }
 
 struct ParseResponse: Codable {
-    let type: String       // "question" or "complete"
+    let type: String       // "question", "complete", "update", or "delete"
     let text: String?      // follow-up question (when type == "question")
     let tasks: [ParsedTask]? // extracted tasks (when type == "complete")
-    let summary: String?   // TTS readback (when type == "complete")
+    let taskId: String?    // existing task ID (when type == "update" or "delete")
+    let changes: TaskChanges? // fields to change (when type == "update")
+    let summary: String?   // TTS readback (when type == "complete", "update", or "delete")
+}
+
+struct TaskContext: Codable {
+    let id: String         // UUID as string
+    let title: String
+    let dueDate: String?   // ISO 8601
+    let priority: String
+    let category: String?
+    let isCompleted: Bool
+}
+
+struct TaskChanges: Codable {
+    var title: String?
+    var dueDate: String?
+    var priority: String?
+    var category: String?
+    var notes: String?
+    var isCompleted: Bool?
 }
 ```
 
@@ -606,7 +647,7 @@ server simple and avoids session management.
 3. Haptic feedback (start recording, task created, error)
 4. Edge cases (empty input, very long dictation, unknown share recipient)
 5. TTS mute toggle in Settings
-6. Conversation timeout (auto-cancel if no speech for 30s)
+6. Conversation timeout (auto-cancel if no speech for 60s)
 7. Usage analytics
 **Deliverable:** Production-ready feature
 
@@ -666,7 +707,7 @@ but still very cheap because:
 
 1. **Conversational AI:** Yes — multi-turn dialogue, not single-shot. AI asks follow-up questions when info is missing, skips questions when user provides everything at once. ✅
 2. **Supabase Auth:** Already implemented in v1.0. Edge Function calls will use existing auth tokens. ✅
-3. **TTS readback:** Yes — on every AI response (questions and summaries). Uses on-device `AVSpeechSynthesizer` (free). User can mute via Settings.
+3. **TTS readback:** Yes — on every AI response (questions and summaries). Primary: OpenAI TTS API (natural voices); fallback: Apple AVSpeechSynthesizer. User can mute or select voice in Profile.
 4. **Mic auto-restart:** After TTS finishes speaking, mic re-activates automatically for hands-free conversation loop.
 5. **Notes extraction:** Yes — AI prompt extracts contextual details into `notes` field.
 6. **Voice-initiated sharing:** Yes — AI extracts share targets from speech. Resolved via contacts cache or inline prompt.

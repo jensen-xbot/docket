@@ -32,19 +32,19 @@
 - **Current:** UserNotifications (local reminders)
 - **Current:** APNs (push notifications for shared tasks)
 - **Current:** MessageUI (email/SMS compose), Contacts (device picker)
-- **Near-term:** Supabase Realtime for shared tasks
-- **Voice-to-Task:** Siri Shortcuts, Apple Speech framework
+- **Current:** Supabase Realtime for shared task sync (tasks + task_shares channels)
+- **Planned:** Siri Shortcuts
 
-## Voice-to-Task (v1.0)
-- **Speech Recognition:** Apple SpeechAnalyzer (on-device) / OpenAI Whisper API (cloud)
+## Voice-to-Task (v1.1)
+- **Speech Recognition:** Apple SFSpeechRecognizer (on-device, primary) / OpenAI Whisper API (opt-in fallback)
 - **Audio Capture:** AVAudioEngine with buffer processing
-- **Transport:** WebSocket (WSS) for real-time streaming
-- **NLU:** GPT-4o-mini via Supabase Edge Functions
-- **TTS (Confirmation):** Apple AVSpeechSynthesizer
-- **Audio Format:** PCM → Opus compression for network
+- **Transport:** HTTPS REST per turn (Supabase `functions.invoke`) — no WebSocket
+- **NLU:** gpt-4.1-mini via OpenRouter → Supabase Edge Function
+- **TTS (Readback):** OpenAI TTS API (primary, natural voices) / Apple AVSpeechSynthesizer (fallback)
+- **Audio Format:** PCM on-device; text-only to backend (no audio streaming)
 
 ## Real-Time
-- **v1.0:** Supabase real-time subscriptions for sync
+- **Implemented:** Supabase Realtime subscriptions for tasks and task_shares (postgres_changes)
 
 ## Development Environment
 - **Xcode:** 16+ (latest stable)

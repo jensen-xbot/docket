@@ -31,9 +31,12 @@ Jon — a busy professional juggling sales work, side projects (Closelo), family
 ### v1.1 Definition of Done (Voice-to-Task)
 - Voice-to-task: Press button, speak naturally, confirm → task created
 - Visual confirmation (preview card, tap to confirm)
-- Natural language parsing: Extract title, due date, priority from speech
-- Apple SpeechAnalyzer for transcription (on-device)
-- GPT-4o-mini via Supabase Edge Function for parsing
+- Natural language parsing: Extract title, due date, priority, category, notes, share target
+- Apple SFSpeechRecognizer for transcription (on-device) with optional Whisper fallback
+- gpt-4.1-mini via OpenRouter → Supabase Edge Function for parsing
+- OpenAI TTS for natural voice readback (AVSpeechSynthesizer fallback)
+- Voice task updates ("move dentist to Thursday") and deletion ("delete the Costco task")
+- Voice grocery list management (templates + ad-hoc items)
 - English only for v1.1
 
 ## Feature Requirements
@@ -61,22 +64,23 @@ Jon — a busy professional juggling sales work, side projects (Closelo), family
 
 ### Should-Have (v1.1) - Voice-to-Task
 1. **Voice-to-Task** (Primary v1.1 Feature)
-2. Apple SpeechAnalyzer transcription
+2. Apple SFSpeechRecognizer transcription (on-device) with optional Whisper fallback
 3. Visual confirmation flow
-4. Natural language task parsing
-5. Supabase Edge Function NLU
+4. Natural language task parsing (gpt-4.1-mini via Edge Function)
+5. OpenAI TTS readback (natural voices) with Apple AVSpeechSynthesizer fallback
+6. Voice task updates and deletion
+7. Voice grocery list management (templates + ad-hoc items)
+8. Notification inbox/bell with invite accept/decline
+9. Bilateral edits on shared tasks (last-write-wins)
+10. Supabase Realtime subscriptions for shared tasks
 
 ### Could-Have (v1.2+)
 1. Siri shortcuts
 2. Advanced voice parsing (recurring, subtasks)
-3. Whisper API fallback option
-4. TTS confirmation responses
-5. Widgets
-6. Apple Watch app
-7. Multiple languages for voice
-8. Shared task realtime presence
-9. Notification inbox/bell with invite accept/decline
-10. Bilateral edits on shared tasks (last-write-wins)
+3. Personalization adaptation loop (learn from corrections)
+4. Widgets
+5. Apple Watch app
+6. Multiple languages for voice
 
 ### Won't-Have (Explicitly Out of Scope)
 1. AI suggestions beyond voice parsing

@@ -58,68 +58,65 @@
   - Can expand to iPad later using same codebase
 - **Date:** 2026-02-06
 
-## ADR-005: Voice-to-Text Architecture (v1.0)
-- **Decision:** Apple SpeechAnalyzer (MVP) → OpenAI Whisper (v1.0+)
+## ADR-005: Voice-to-Text Architecture (v1.1)
+- **Decision:** Apple SFSpeechRecognizer (primary, on-device) + OpenAI Whisper API (optional fallback)
 - **Context:** Adding voice task creation feature. Need on-device option for privacy/speed and cloud option for accuracy.
 - **Options Considered:**
-  - Apple SpeechAnalyzer only (free, private, iOS 17+, less accurate)
+  - Apple SFSpeechRecognizer only (free, private, iOS 17+, less accurate for accents)
   - OpenAI Whisper API only (high accuracy, requires internet, ongoing cost)
-  - Hybrid: Apple for quick commands, Whisper for complex (best of both)
+  - Hybrid: SFSpeechRecognizer primary, Whisper as user-toggleable fallback (best of both)
   - OpenAI Realtime API (streaming, voice-in-voice-out, higher cost)
-- **Decision:** Start with Apple SpeechAnalyzer for v1.0 foundation, add Whisper as enhanced option in v1.0+
+- **Decision:** SFSpeechRecognizer as default; Whisper API as opt-in "Enhanced transcription" toggle in Profile
 - **Consequences:**
-  - MVP voice feature ships without external API costs
+  - Voice feature ships without external API costs by default
   - Privacy-first (on-device processing)
-  - May need to upgrade to Whisper for complex natural language
-  - Realtime API considered but overkill for MVP
-- **Date:** 2026-02-06
+  - Whisper fallback available for users who need better accent accuracy
+  - Realtime API considered but overkill for task parsing
+- **Date:** 2026-02-06 (updated 2026-02-10)
 
-## ADR-006: Audio Gateway/Tunnel (v1.0)
-- **Decision:** WebSocket (WSS) for real-time streaming
-- **Context:** Need secure, persistent connection for audio streaming from device to backend agent
-- **Options Considered:**
-  - REST API with chunked uploads (simpler, higher latency)
-  - WebSocket (real-time, bidirectional, standard)
-  - WebRTC (overkill for this use case)
-  - MQTT (IoT-focused, not ideal for audio)
-- **Decision:** WebSocket on port 443 (WSS) with automatic reconnection
+## ADR-006: Voice Transport (v1.1) — SUPERSEDED
+- **Original decision:** WebSocket (WSS) for real-time streaming
+- **Actual implementation:** HTTPS REST per turn (Supabase `functions.invoke`)
+- **Why changed:** Conversational voice uses a turn-based model (user speaks → transcribe on-device → send text to Edge Function → get response). No audio streaming to backend. Each turn is a single REST call with conversation history.
 - **Consequences:**
-  - Real-time streaming capability
-  - Secure by default (TLS)
-  - Need reconnection logic for dropped connections
-  - Supabase Edge Functions support WebSocket clients
-- **Date:** 2026-02-06
+  - Simpler architecture, no WebSocket connection management
+  - Latency is acceptable (~1-2s per turn including AI parsing)
+  - Audio stays on-device (SFSpeechRecognizer); only text goes to backend
+- **Date:** 2026-02-06 (superseded 2026-02-10)
 
-## ADR-007: Natural Language Understanding (v1.0)
-- **Decision:** LLM function calling (GPT-4o-mini via Supabase Edge Function)
-- **Context:** Converting voice transcription to structured task data (title, due date, priority)
+## ADR-007: Natural Language Understanding (v1.1)
+- **Decision:** gpt-4.1-mini via OpenRouter → Supabase Edge Function
+- **Context:** Converting voice transcription to structured task data (title, due date, priority, category, notes, share target)
 - **Options Considered:**
   - Regex/pattern matching only (fast, limited, brittle)
   - Apple's NaturalLanguage framework (on-device, limited task extraction)
-  - LLM function calling (flexible, accurate, requires API call)
+  - LLM structured output (flexible, accurate, requires API call)
   - Hybrid: patterns for dates, LLM for complex parsing
-- **Decision:** LLM function calling for v1.0 with caching for common patterns
+- **Decision:** gpt-4.1-mini for all semantic parsing; deterministic control intents handled client-side
 - **Consequences:**
-  - High accuracy for complex commands
-  - Ongoing API costs (~$0.005 per extraction)
-  - Latency ~1-2s for parsing
-  - Can fall back to patterns if offline
-- **Date:** 2026-02-06
+  - High accuracy for complex multi-task commands
+  - Cost: ~$0.001/turn (~$8/month @ 100 users)
+  - Latency ~1-2s per turn
+  - Supports create, update, delete, and grocery list flows
+- **Date:** 2026-02-06 (updated 2026-02-10)
 
-## ADR-008: Task Sharing + Push Notifications (v1.0)
-- **Decision:** Auto-accept shares, push notifications via Supabase Edge Function + APNs
-- **Context:** Shared tasks must appear instantly for recipients, with a notification that deep-links to the task.
-- **Options Considered:**
-  - Manual accept/decline flow (adds friction, extra UI)
-  - Auto-accept share and allow remove from list (fast, Reminders-like)
-  - Local notification only (requires app open, misses real-time push)
-  - APNs push via Supabase Edge Function (real push, supports deep-link)
-- **Decision:** Auto-accept shares; send APNs push from Edge Function on `task_shares` INSERT.
+## ADR-008: Task Sharing + Push Notifications (v1.0 → v2)
+- **Original decision:** Auto-accept shares for all recipients
+- **Updated decision (v2):** Invite-gated for new contacts; auto-accept only for existing accepted contacts
+- **Context:** Auto-accept was too permissive. New contacts should explicitly accept/decline a share invite.
+- **Implementation:**
+  - `resolve_share_recipient` trigger resolves email → user ID but only auto-accepts if prior accepted share exists
+  - `task_shares.status` lifecycle: `pending` → `accepted` / `declined`
+  - Recipient can UPDATE own pending invites (RLS policy)
+  - `notifications` table stores invite notifications; bell badge + inbox in app
+  - Realtime subscriptions on `tasks` and `task_shares` for bilateral edits (LWW)
+  - Push notifications route by type: `task_share_invite` → Contacts/Invites, `task_id` → task detail
 - **Consequences:**
-  - Fast, low-friction sharing for families
-  - Requires APNs key setup and Edge Function secrets
-  - Simple deep-link: push payload includes `task_id`
-- **Date:** 2026-02-08
+  - More secure sharing model
+  - Requires invite UX in ContactsListView (accept/decline)
+  - Notification inbox adds discoverability
+  - Realtime sync reduces pull-based latency
+- **Date:** 2026-02-08 (updated 2026-02-10 with Sharing System V2)
 
 ## Known Risks
 
@@ -130,4 +127,4 @@
 5. **Apple Developer account:** $99/year cost and potential activation delays
 6. **Voice feature complexity:** Audio processing adds significant complexity to codebase
 7. **Privacy concerns:** Voice data transmission requires clear user consent and security measures
-8. **API costs:** Voice features (Whisper + GPT-4o) add ongoing operational costs
+8. **API costs:** Voice features (optional Whisper + gpt-4.1-mini + OpenAI TTS) add ongoing operational costs (~$23/month @ 100 users)

@@ -97,8 +97,9 @@ Steps:
 
 ### Sharing + Push Notifications Setup
 1. Apply migration `supabase/migrations/010_sharing_v2.sql`
-2. Deploy Edge Function: `supabase functions deploy push-share-notification`
-3. Add APNs secrets in Supabase Edge Functions settings
+2. Apply migration `supabase/migrations/011_invite_gating_and_notifications.sql`
+3. Deploy Edge Function: `supabase functions deploy push-share-notification`
+4. Add APNs secrets in Supabase Edge Functions settings
 4. Create DB webhook for `task_shares` INSERT → Edge Function
 5. Enable **Push Notifications** capability in Xcode
 

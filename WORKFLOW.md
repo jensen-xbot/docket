@@ -2,9 +2,9 @@
 
 ## Project Overview
 - **Name:** Docket
-- **Type:** iOS Todo App (MVP → v1.0)
+- **Type:** iOS Todo App (v1.0 complete, v1.1 in progress)
 - **Purpose:** Learning project for SwiftUI/SwiftData before Closelo Mobile
-- **Status:** ✅ MVP Complete, Awaiting Testing
+- **Status:** v1.0 Complete (cloud sync + sharing); v1.1 In Progress (voice-to-task + Sharing V2)
 
 ---
 

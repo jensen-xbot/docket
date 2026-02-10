@@ -15,7 +15,7 @@ Voice-to-task with conversational AI lets users create, categorize, annotate, an
 - **Local persistence:** SwiftData
 - **Cloud sync:** Supabase bi-directional with offline queue
 - **Voice transcription:** Apple SFSpeechRecognizer (on-device, free)
-- **TTS readback:** AVSpeechSynthesizer (on-device, free)
+- **TTS readback:** OpenAI TTS API (primary, natural voices) / AVSpeechSynthesizer (fallback)
 - **AI parsing:** gpt-4.1-mini via OpenRouter → Supabase Edge Function
 - **Audio capture:** AVAudioEngine + AVAudioSession
 - **No orchestrator:** Single-shot/conversational API calls — no LangChain/LangGraph
@@ -77,11 +77,14 @@ struct ParsedTask: Codable, Identifiable {
     let id: UUID
     var title: String
     var dueDate: Date?
+    var hasTime: Bool      // true if AI returned HH:mm, false if date-only
     var priority: String   // "low", "medium", "high"
     var category: String?
     var notes: String?
     var shareWith: String? // email or display name
     var suggestion: String?
+    var checklistItems: [String]?  // AI-suggested item names (ad-hoc grocery list)
+    var useTemplate: String?       // store name whose template to load
 }
 
 struct ConversationMessage: Codable {
@@ -90,10 +93,12 @@ struct ConversationMessage: Codable {
 }
 
 struct ParseResponse: Codable {
-    let type: String       // "question" or "complete"
+    let type: String       // "question", "complete", "update", or "delete"
     let text: String?      // follow-up question (when type == "question")
     let tasks: [ParsedTask]? // extracted tasks (when type == "complete")
-    let summary: String?   // TTS readback text (when type == "complete")
+    let taskId: String?    // existing task ID (when type == "update" or "delete")
+    let changes: TaskChanges? // fields to change (when type == "update")
+    let summary: String?   // TTS readback (when type == "complete", "update", or "delete")
 }
 ```
 
@@ -114,11 +119,17 @@ struct ParseResponse: Codable {
 
 ### Voice-to-Task (v1.1 — in progress)
 - `Managers/SpeechRecognitionManager.swift` — SFSpeechRecognizer + AVAudioEngine wrapper
-- `Managers/TTSManager.swift` — AVSpeechSynthesizer wrapper for TTS readback
+- `Managers/TTSManager.swift` — OpenAI TTS (primary) + AVSpeechSynthesizer (fallback) for readback
 - `Managers/VoiceTaskParser.swift` — Calls Supabase Edge Function for AI parsing
 - `Views/VoiceRecordingView.swift` — Mic button + conversation overlay
 - `Views/TaskConfirmationView.swift` — Parsed task list with edit/confirm
-- `Models/ParsedTask.swift` — Lightweight struct for AI response
+- `Models/ParsedTask.swift` — Lightweight struct for AI response (includes TaskContext, TaskChanges)
+
+### Sharing & Notifications (v1.1)
+- `Views/ShareTaskView.swift` — Share method sheet (Docket-first primary action)
+- `Views/ContactsListView.swift` — Contact management + pending invite accept/decline
+- `Views/NotificationsListView.swift` — Bell badge + notification inbox
+- `Views/SharedAvatarView.swift` — Dual-avatar with tap-to-reveal "Shared by/with" label
 
 ### Utilities
 - `Utilities/Date+Extensions.swift` — Due date formatting and color logic
@@ -145,6 +156,14 @@ struct ParseResponse: Codable {
 - **Don't withAnimation scroll calls:** `withAnimation { scrollProxy.scrollTo() }` animates content insertions, not just scroll. Use `DispatchQueue.main.async { scrollProxy.scrollTo() }` instead.
 - **Audio level feedback:** Calculate RMS in the audio tap (nonisolated), poll to @MainActor at ~12fps with EMA smoothing (0.3 old + 0.7 new). Mask a colored mic icon from bottom with the level value.
 - **Bottom-anchored chat:** Use `GeometryReader` + `.frame(minHeight: geometry.size.height, alignment: .bottom)` inside ScrollView so messages anchor to the bottom when few.
+
+## Personalization Adaptation Guidelines (v1.2)
+- **Learn from explicit edits only:** do not infer personalized mappings without a user correction signal.
+- **Scope by source:** prioritize corrections on voice-created tasks to avoid polluting signal from unrelated manual edits.
+- **Keep profile compact:** store ranked mappings (recency + frequency), cap each list, and prune stale entries.
+- **Privacy first:** no raw audio retention for personalization; no transcript payloads in analytics.
+- **User control required:** include opt-in/opt-out and "reset learned voice data" in Profile.
+- **Prompt discipline:** inject only relevant personalization snippets (top N), never full correction history.
 
 ## Development Workflow
 - Build iteratively: Model → ViewModel → View → Preview → Test on device
