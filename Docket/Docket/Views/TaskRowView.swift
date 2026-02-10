@@ -34,11 +34,30 @@ struct TaskRowView: View {
                 
                 // Task Content
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(task.title)
-                        .font(.body)
-                        .strikethrough(task.isCompleted)
-                        .foregroundStyle(task.isCompleted ? .secondary : .primary)
-                        .lineLimit(2)
+                    HStack(spacing: 8) {
+                        Text(task.title)
+                            .font(.body)
+                            .strikethrough(task.isCompleted)
+                            .foregroundStyle(task.isCompleted ? .secondary : .primary)
+                            .lineLimit(2)
+                        
+                        Spacer()
+                        
+                        // Shared avatars on the title line
+                        if task.isShared {
+                            SharedAvatarView(
+                                currentUserProfile: currentUserProfile,
+                                sharerProfile: sharerProfile,
+                                size: 20
+                            )
+                        } else if !sharedWithProfiles.isEmpty {
+                            SharedAvatarView(
+                                currentUserProfile: currentUserProfile,
+                                recipientProfiles: sharedWithProfiles,
+                                size: 20
+                            )
+                        }
+                    }
                     
                     HStack(spacing: 6) {
                         // Priority arrow
@@ -90,17 +109,7 @@ struct TaskRowView: View {
                     }
                 }
                 
-                Spacer()
-                
-                // Shared avatar overlay (recipient: sharer; owner: people shared with)
-                if task.isShared {
-                    SharedAvatarView(
-                        currentUserProfile: currentUserProfile,
-                        sharerProfile: sharerProfile
-                    )
-                } else if !sharedWithProfiles.isEmpty {
-                    SharedAvatarView(recipientProfiles: sharedWithProfiles)
-                }
+                Spacer(minLength: 0)
                 
                 if let onShare = onShare {
                     Button(action: onShare) {

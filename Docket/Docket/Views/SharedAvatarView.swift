@@ -7,6 +7,8 @@ struct SharedAvatarView: View {
     let recipientProfiles: [UserProfile]?
     let size: CGFloat
     
+    @State private var showLabel = false
+    
     /// Recipient view: shows current user + sharer overlap
     init(currentUserProfile: UserProfile?, sharerProfile: UserProfile?, size: CGFloat = 24) {
         self.currentUserProfile = currentUserProfile
@@ -15,27 +17,74 @@ struct SharedAvatarView: View {
         self.size = size
     }
     
-    /// Owner view: shows recipients this task is shared with
-    init(recipientProfiles: [UserProfile], size: CGFloat = 24) {
-        self.currentUserProfile = nil
+    /// Owner view: shows current user behind + recipients on top
+    init(currentUserProfile: UserProfile?, recipientProfiles: [UserProfile], size: CGFloat = 24) {
+        self.currentUserProfile = currentUserProfile
         self.sharerProfile = nil
         self.recipientProfiles = recipientProfiles
         self.size = size
     }
     
-    var body: some View {
+    /// Label text shown on tap
+    private var labelText: String {
         if let recipients = recipientProfiles, !recipients.isEmpty {
-            // Owner-side: stack of recipient avatars
+            let names = recipients.prefix(3).compactMap { $0.displayName ?? $0.email }
+            return "You shared with \(names.joined(separator: ", "))"
+        } else if let sharer = sharerProfile {
+            let name = sharer.displayName ?? sharer.email ?? "Someone"
+            return "\(name) shared with you"
+        }
+        return "Shared"
+    }
+    
+    var body: some View {
+        // Tap target wraps the avatar stack; sized to 44pt minimum for accessibility
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) { showLabel = true }
+            _Concurrency.Task { @MainActor in
+                try? await _Concurrency.Task.sleep(for: .seconds(2))
+                withAnimation(.easeInOut(duration: 0.3)) { showLabel = false }
+            }
+        } label: {
+            avatarStack
+        }
+        .buttonStyle(.plain)
+        .frame(minWidth: 44, minHeight: 44)
+        .overlay(alignment: .top) {
+            if showLabel {
+                Text(labelText)
+                    .font(.caption2)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.black.opacity(0.85))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
+                    .offset(y: -28)
+                    .fixedSize()
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .allowsHitTesting(false)
+            }
+        }
+        .zIndex(showLabel ? 999 : 0)
+    }
+    
+    @ViewBuilder
+    private var avatarStack: some View {
+        if let recipients = recipientProfiles, !recipients.isEmpty {
+            // Owner-side: "me" behind (left), recipient(s) on top (right)
             HStack(spacing: -(size * 0.4)) {
-                ForEach(recipients.prefix(3), id: \.id) { profile in
+                avatarView(profile: currentUserProfile, isCurrentUser: true)
+                ForEach(recipients.prefix(2), id: \.id) { profile in
                     avatarView(profile: profile, isCurrentUser: false)
                 }
             }
         } else {
-            // Recipient-side: current user + sharer overlap
+            // Recipient-side: sharer behind (left), "me" on top (right)
             HStack(spacing: -(size * 0.4)) {
-                avatarView(profile: currentUserProfile, isCurrentUser: true)
                 avatarView(profile: sharerProfile, isCurrentUser: false)
+                avatarView(profile: currentUserProfile, isCurrentUser: true)
             }
         }
     }

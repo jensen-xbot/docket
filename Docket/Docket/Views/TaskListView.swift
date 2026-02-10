@@ -128,7 +128,7 @@ struct TaskListView: View {
                     .environment(networkMonitor)
                 }
                 .safeAreaInset(edge: .bottom) {
-                    if !networkMonitor.isConnected || pendingCount > 0 {
+                    if !networkMonitor.isConnected {
                         offlinePendingBanner
                     }
                 }
@@ -143,39 +143,22 @@ struct TaskListView: View {
     
     @ViewBuilder
     private var offlinePendingBanner: some View {
-        VStack(spacing: 0) {
-            if !networkMonitor.isConnected {
-                HStack(spacing: 8) {
-                    Image(systemName: "wifi.slash")
-                        .font(.caption)
-                    Text("Offline")
-                        .font(.caption)
-                        .fontWeight(.medium)
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color.red)
-                .cornerRadius(8)
+        if !networkMonitor.isConnected {
+            HStack(spacing: 8) {
+                Image(systemName: "wifi.slash")
+                    .font(.caption)
+                Text("Offline")
+                    .font(.caption)
+                    .fontWeight(.medium)
             }
-            
-            if pendingCount > 0 && networkMonitor.isConnected {
-                HStack(spacing: 8) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.caption)
-                    Text("\(pendingCount) change\(pendingCount == 1 ? "" : "s") pending")
-                        .font(.caption)
-                        .fontWeight(.medium)
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color.orange)
-                .cornerRadius(8)
-            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Color.red)
+            .cornerRadius(8)
+            .padding(.horizontal)
+            .padding(.bottom, 8)
         }
-        .padding(.horizontal)
-        .padding(.bottom, 8)
     }
     
     @ViewBuilder
@@ -338,7 +321,8 @@ struct TaskListView: View {
     }
     
     private func taskRow(for task: Task) -> some View {
-        let profile: UserProfile? = task.isShared ? syncEngine.sharerProfiles[task.userId ?? ""] : nil
+        let sharerKey = (task.userId ?? "").uppercased()
+        let profile: UserProfile? = task.isShared ? syncEngine.sharerProfiles[sharerKey] : nil
         let sharedWith: [UserProfile] = task.isShared ? [] : (syncEngine.sharedWithProfiles[task.id] ?? [])
         return TaskRowView(
             task: task,

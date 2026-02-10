@@ -238,7 +238,10 @@ class SyncEngine {
                 guard let sid = share.sharedWithId else { continue }
                 let idStr = sid.uuidString
                 if let profile = profileById[idStr] {
-                    result[share.taskId, default: []].append(profile)
+                    // Deduplicate: skip if this recipient is already in the list for this task
+                    if !result[share.taskId, default: []].contains(where: { $0.id == profile.id }) {
+                        result[share.taskId, default: []].append(profile)
+                    }
                 }
             }
             sharedWithProfiles = result
@@ -528,6 +531,8 @@ class SyncEngine {
     
     private var tasksChannel: RealtimeChannelV2?
     private var taskSharesChannel: RealtimeChannelV2?
+    private var tasksRealtimeSubscription: RealtimeSubscription?
+    private var taskSharesRealtimeSubscription: RealtimeSubscription?
     
     func subscribeToSharedTasks() async {
         guard !didSubscribe, isNetworkAvailable else { return }
@@ -539,7 +544,7 @@ class SyncEngine {
             
             // Subscribe to owned tasks (user_id = current user)
             let tasksCh = supabase.channel("tasks-\(userId)")
-            tasksCh.onPostgresChange(AnyAction.self, schema: "public", table: "tasks", filter: "user_id=eq.\(userId)") { [weak self] _ in
+            tasksRealtimeSubscription = tasksCh.onPostgresChange(AnyAction.self, schema: "public", table: "tasks", filter: "user_id=eq.\(userId)") { [weak self] _ in
                 _Concurrency.Task { @MainActor in
                     await self?.pullTasks()
                 }
@@ -549,7 +554,7 @@ class SyncEngine {
             
             // Subscribe to task_shares where we're the recipient (shared_with_id = current user)
             let sharesCh = supabase.channel("task-shares-\(userId)")
-            sharesCh.onPostgresChange(AnyAction.self, schema: "public", table: "task_shares", filter: "shared_with_id=eq.\(userId)") { [weak self] _ in
+            taskSharesRealtimeSubscription = sharesCh.onPostgresChange(AnyAction.self, schema: "public", table: "task_shares", filter: "shared_with_id=eq.\(userId)") { [weak self] _ in
                 _Concurrency.Task { @MainActor in
                     await self?.pullTasks()
                 }
