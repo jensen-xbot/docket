@@ -1,305 +1,337 @@
 # Docket Tutorials & Onboarding Guide
 
-*Track tutorial implementations and user onboarding flows*
+*Tutorial system for progressive feature discovery*  
+*Created: 2026-02-10*
 
 ---
 
-## Overview
+## Philosophy
 
-Docket uses **contextual tutorials** — brief, single-use hints that appear the first time a user encounters a feature. No lengthy onboarding screens. Just-in-time education.
+**Don't explain everything at once.** Teach features as users encounter them, then never show again.
 
-**Philosophy:**
-- Teach by doing, not by reading
-- One hint per feature
-- Never show twice
-- Dismissible instantly
+**Principles:**
+1. **Contextual** — Show tutorial when feature is first used
+2. **Brief** — 1-2 sentences max, visual demonstration
+3. **Dismissible** — Tap to dismiss, never auto-repeat
+4. **Trackable** — Log what's been seen, reset in settings
 
 ---
 
-## Tutorial System Architecture
+## Tutorial Registry
 
-### Data Model
-```swift
-@Model
-class TutorialState {
-    @Attribute(.unique) var id: String
-    var hasBeenShown: Bool = false
-    var firstShownAt: Date?
-    var dismissedAt: Date?
-    
-    init(id: String) {
-        self.id = id
-    }
-}
+| # | Tutorial | Trigger | Content | Status |
+|---|----------|---------|---------|--------|
+| T1 | **Welcome** | First app open | "Welcome to Docket. Tap + to create your first task." | 📝 Draft |
+| T2 | **Completion Button** | First task created | "Tap once for progress • Double-tap to complete" | 📝 Draft |
+| T3 | **Voice Input** | First mic button tap | "Speak naturally • AI will ask follow-ups if needed" | 📝 Draft |
+| T4 | **Sharing** | First share button tap | "Share tasks via email or text • Recipients can edit too" | 📝 Draft |
+| T5 | **Templates** | First profile hub visit | "Create grocery templates for quick lists" | 📝 Draft |
+| T6 | **Checklists** | First checklist added | "Add items • Track progress • Tap to complete each" | 📝 Draft |
+| T7 | **Pin & Reorder** | Long press on task | "Hold and drag to reorder • Pin important tasks" | 📝 Draft |
+| T8 | **Categories** | First category created | "Customize icons and colors • Organize your way" | 📝 Draft |
+| T9 | **Notifications** | First due date set | "Enable notifications for reminders" | 📝 Draft |
+| T10 | **Voice Corrections** | First AI mistake | "Tap to edit • AI learns from your corrections" | 📝 Draft |
 
-// Tutorial IDs (add as needed)
-extension TutorialState {
-    static let progressButton = "progress_button_tutorial"
-    static let voiceRecording = "voice_recording_tutorial"
-    static let taskSharing = "task_sharing_tutorial"
-    static let groceryTemplates = "grocery_templates_tutorial"
-    static let pinReorder = "pin_reorder_tutorial"
-    static let checklistItems = "checklist_items_tutorial"
-}
+---
+
+## Tutorial T2: Completion Button (Priority)
+
+**Trigger:** User creates first task (or first tap on completion button)
+
+### Design
+
+```
+┌─────────────────────────────────────────┐
+│                                         │
+│   ┌─────────────────────────────────┐   │
+│   │  📋 Progress & Completion       │   │
+│   │                                 │   │
+│   │  [◐] Tap once                   │   │
+│   │      Show progress slider       │   │
+│   │                                 │   │
+│   │  [◐] → [✓] Double-tap           │   │
+│   │      Complete immediately       │   │
+│   │                                 │   │
+│   │         [Got it]                │   │
+│   └─────────────────────────────────┘   │
+│                                         │
+│   (Backdrop dimmed, modal centered)     │
+└─────────────────────────────────────────┘
 ```
 
-### Tutorial Manager
+### Content
+
+**Title:** Progress & Completion
+
+**Body:**
+```
+[Animated GIF or looped video]
+
+◐ Tap once
+   Show progress slider
+
+◐ → ✓ Double-tap  
+   Complete immediately
+```
+
+**Button:** "Got it" (dismisses forever)
+
+**Don't show again:** Store in UserDefaults
 ```swift
+@AppStorage("hasSeenCompletionTutorial") 
+var hasSeenCompletionTutorial = false
+```
+
+---
+
+## Tutorial T3: Voice Input (Priority)
+
+**Trigger:** First tap on mic button
+
+### Design
+
+```
+┌─────────────────────────────────────────┐
+│                                         │
+│   ┌─────────────────────────────────┐   │
+│   │  🎤 Voice Tasks                 │   │
+│   │                                 │   │
+│   │  "Email the client by Friday"   │   │
+│   │                                 │   │
+│   │  AI will:                       │   │
+│   │  • Extract task & due date      │   │
+│   │  • Suggest priority             │   │
+│   │  • Ask follow-ups if unclear    │   │
+│   │                                 │   │
+│   │         [Try it]                │   │
+│   └─────────────────────────────────┘   │
+└─────────────────────────────────────────┘
+```
+
+### Content
+
+**Title:** 🎤 Voice Tasks
+
+**Body:**
+```
+Speak naturally. Try:
+"Email the client by Friday"
+
+AI will extract:
+• Task: Email the client
+• Due: Friday
+• Priority: Medium
+
+AI asks follow-ups if needed.
+```
+
+**Button:** "Try it" (dismisses, starts recording)
+
+---
+
+## Implementation Architecture
+
+### Tutorial Manager
+
+```swift
+import SwiftUI
+
 @Observable
 class TutorialManager {
     static let shared = TutorialManager()
     
-    private var shownTutorials: Set<String> = []
+    // MARK: - Tutorial State
     
-    func shouldShow(_ tutorialId: String) -> Bool {
-        !shownTutorials.contains(tutorialId)
-    }
+    @AppStorage("tutorials.completed") 
+    private var completedTutorials: [String] = []
     
-    func markAsShown(_ tutorialId: String) {
-        shownTutorials.insert(tutorialId)
-        // Persist to UserDefaults or SwiftData
-        UserDefaults.standard.set(true, forKey: "tutorial_\(tutorialId)")
-    }
+    @AppStorage("tutorials.dismissed") 
+    private var dismissedTutorials: [String] = []
     
-    func resetAllTutorials() {
-        shownTutorials.removeAll()
-        // Clear UserDefaults
-        TutorialState.allCases.forEach { id in
-            UserDefaults.standard.removeObject(forKey: "tutorial_\(id)")
-        }
-    }
-}
-```
-
----
-
-## Tutorial Implementations
-
-### ✅ Completed Tutorials
-
-| Tutorial ID | Feature | Status | Date Completed |
-|-------------|---------|--------|----------------|
-| *None yet* | — | — | — |
-
----
-
-### 🚧 Planned Tutorials
-
-#### 1. Progress Button Tutorial
-**Tutorial ID:** `progress_button_tutorial`  
-**Trigger:** First tap on completion button  
-**Priority:** 🔴 HIGH (core interaction)
-
-**Design:**
-```
-┌─────────────────────────────────────────┐
-│                                         │
-│   [Tooltip Popup]                       │
-│   ┌───────────────────────────────┐    │
-│   │  💡 New: Progress Tracking    │    │
-│   │                               │    │
-│   │  Tap ONCE → Set progress      │    │
-│   │  Tap TWICE → Complete now     │    │
-│   │                               │    │
-│   │  [Got it]                     │    │
-│   └───────────────────────────────┘    │
-│                                         │
-│   ◐  Task Title                     📌  │
-│      Due tomorrow · Work                │
-│   ▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░░░  25%    │
-│                                         │
-└─────────────────────────────────────────┘
-```
-
-**Implementation:**
-```swift
-// In TaskRowView
-.completionButton(
-    onTap: {
-        if TutorialManager.shared.shouldShow(.progressButton) {
-            showTutorial(.progressButton)
-        } else {
-            showProgressSlider()
-        }
-    }
-)
-
-func showTutorial(_ id: String) {
-    let tooltip = TooltipView(
-        title: "💡 New: Progress Tracking",
-        message: "Tap ONCE → Set progress\nTap TWICE → Complete now",
-        action: "Got it",
-        onDismiss: {
-            TutorialManager.shared.markAsShown(id)
-            showProgressSlider() // Continue with normal action
-        }
-    )
-    present(tooltip)
-}
-```
-
----
-
-#### 2. Voice Recording Tutorial
-**Tutorial ID:** `voice_recording_tutorial`  
-**Trigger:** First tap on mic button  
-**Priority:** 🔴 HIGH (key differentiator)
-
-**Design:**
-```
-┌─────────────────────────────────────────┐
-│                                         │
-│   [Full-screen overlay]                 │
-│                                         │
-│        🎤                               │
-│                                         │
-│   Speak naturally to create tasks       │
-│                                         │
-│   "Email the client by Friday,          │
-│    it's urgent"                         │
-│                                         │
-│   ↓                                     │
-│                                         │
-│   AI will ask follow-up questions       │
-│   if needed                             │
-│                                         │
-│        [Start Speaking]                 │
-│                                         │
-└─────────────────────────────────────────┘
-```
-
-**Text:**
-- **Title:** "Voice-to-Task"
-- **Body:** "Speak naturally. The AI will understand and create tasks. You can even update tasks by voice."
-- **Button:** "Try It"
-- **Secondary:** "Show me an example"
-
-**Example Flow:**
-```
-User taps "Show me an example"
-→ Play 3-second demo: "Buy groceries tomorrow"
-→ Show AI response animation
-→ User taps "Try It" → Start real recording
-```
-
----
-
-#### 3. Task Sharing Tutorial
-**Tutorial ID:** `task_sharing_tutorial`  
-**Trigger:** First tap on share button  
-**Priority:** 🟡 MEDIUM
-
-**Design:**
-```
-┌─────────────────────────────────────────┐
-│                                         │
-│   ┌───────────────────────────────┐    │
-│   │  🤝 Share Tasks               │    │
-│   │                               │    │
-│   │  Share any task via email     │    │
-│   │  or text message.             │    │
-│   │                               │    │
-│   │  Recipients can edit tasks    │    │
-│   │  in real-time.                │    │
-│   │                               │    │
-│   │  [Got it]                     │    │
-│   └───────────────────────────────┘    │
-│                                         │
-└─────────────────────────────────────────┘
-```
-
----
-
-#### 4. Grocery Templates Tutorial
-**Tutorial ID:** `grocery_templates_tutorial`  
-**Trigger:** First open of Profile → Store Templates  
-**Priority:** 🟢 LOW (power user feature)
-
----
-
-#### 5. Pin & Reorder Tutorial
-**Tutorial ID:** `pin_reorder_tutorial`  
-**Trigger:** First long-press on task  
-**Priority:** 🟡 MEDIUM
-
----
-
-#### 6. Checklist Items Tutorial
-**Tutorial ID:** `checklist_items_tutorial`  
-**Trigger:** First task with checklist created  
-**Priority:** 🟢 LOW
-
----
-
-## Tutorial UI Components
-
-### Tooltip Popup
-```swift
-struct TooltipView: View {
-    let title: String
-    let message: String
-    let action: String
-    let onDismiss: () -> Void
+    // MARK: - Tutorial Definitions
     
-    var body: some View {
-        VStack(spacing: 12) {
-            Text(title)
-                .font(.headline)
-            
-            Text(message)
-                .font(.body)
-                .multilineTextAlignment(.center)
-                .foregroundColor(.secondary)
-            
-            Button(action: onDismiss) {
-                Text(action)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
-                    .background(Color.blue)
-                    .cornerRadius(8)
+    enum TutorialID: String, CaseIterable {
+        case welcome = "T1"
+        case completion = "T2"
+        case voice = "T3"
+        case sharing = "T4"
+        case templates = "T5"
+        case checklists = "T6"
+        case pinReorder = "T7"
+        case categories = "T8"
+        case notifications = "T9"
+        case voiceCorrections = "T10"
+        
+        var title: String {
+            switch self {
+            case .welcome: return "Welcome"
+            case .completion: return "Progress & Completion"
+            case .voice: return "Voice Tasks"
+            case .sharing: return "Share Tasks"
+            case .templates: return "Templates"
+            case .checklists: return "Checklists"
+            case .pinReorder: return "Pin & Reorder"
+            case .categories: return "Categories"
+            case .notifications: return "Notifications"
+            case .voiceCorrections: return "Voice Corrections"
             }
         }
-        .padding(24)
-        .background(Color(.systemBackground))
-        .cornerRadius(16)
-        .shadow(radius: 10)
-        .padding(32)
+        
+        var hasBeenSeen: Bool {
+            TutorialManager.shared.hasCompleted(self) || 
+            TutorialManager.shared.hasDismissed(self)
+        }
+    }
+    
+    // MARK: - Public Methods
+    
+    func shouldShow(_ tutorial: TutorialID) -> Bool {
+        !tutorial.hasBeenSeen
+    }
+    
+    func complete(_ tutorial: TutorialID) {
+        if !completedTutorials.contains(tutorial.rawValue) {
+            completedTutorials.append(tutorial.rawValue)
+            Analytics.track("tutorial_completed", ["id": tutorial.rawValue])
+        }
+    }
+    
+    func dismiss(_ tutorial: TutorialID) {
+        if !dismissedTutorials.contains(tutorial.rawValue) {
+            dismissedTutorials.append(tutorial.rawValue)
+            Analytics.track("tutorial_dismissed", ["id": tutorial.rawValue])
+        }
+    }
+    
+    func hasCompleted(_ tutorial: TutorialID) -> Bool {
+        completedTutorials.contains(tutorial.rawValue)
+    }
+    
+    func hasDismissed(_ tutorial: TutorialID) -> Bool {
+        dismissedTutorials.contains(tutorial.rawValue)
+    }
+    
+    func resetAll() {
+        completedTutorials.removeAll()
+        dismissedTutorials.removeAll()
+        Analytics.track("tutorials_reset")
+    }
+    
+    func reset(_ tutorial: TutorialID) {
+        completedTutorials.removeAll { $0 == tutorial.rawValue }
+        dismissedTutorials.removeAll { $0 == tutorial.rawValue }
+    }
+    
+    // MARK: - Progress
+    
+    var completionPercentage: Double {
+        let total = TutorialID.allCases.count
+        let completed = TutorialID.allCases.filter { $0.hasBeenSeen }.count
+        return Double(completed) / Double(total) * 100
     }
 }
 ```
 
-### Highlight Overlay
+### Tutorial View Modifier
+
 ```swift
-struct HighlightOverlay: View {
-    let targetFrame: CGRect
-    let tooltip: TooltipView
+struct TutorialOverlay: ViewModifier {
+    let tutorial: TutorialManager.TutorialID
+    let content: () -> AnyView
+    let onComplete: () -> Void
+    
+    @State private var isShowing = false
+    
+    func body(content: Content) -> some View {
+        content
+            .onAppear {
+                if TutorialManager.shared.shouldShow(tutorial) {
+                    // Delay slightly so UI settles
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        isShowing = true
+                    }
+                }
+            }
+            .overlay {
+                if isShowing {
+                    TutorialModal(
+                        tutorial: tutorial,
+                        content: content(),
+                        onDismiss: {
+                            isShowing = false
+                            TutorialManager.shared.dismiss(tutorial)
+                        },
+                        onComplete: {
+                            isShowing = false
+                            TutorialManager.shared.complete(tutorial)
+                            onComplete()
+                        }
+                    )
+                }
+            }
+    }
+}
+
+extension View {
+    func tutorial(
+        _ tutorial: TutorialManager.TutorialID,
+        @ViewBuilder content: @escaping () -> some View,
+        onComplete: @escaping () -> Void = {}
+    ) -> some View {
+        modifier(TutorialOverlay(
+            tutorial: tutorial,
+            content: { AnyView(content()) },
+            onComplete: onComplete
+        ))
+    }
+}
+```
+
+### Tutorial Modal Component
+
+```swift
+struct TutorialModal: View {
+    let tutorial: TutorialManager.TutorialID
+    let content: AnyView
+    let onDismiss: () -> Void
+    let onComplete: () -> Void
     
     var body: some View {
         ZStack {
-            // Dimmed background with cutout
-            GeometryReader { geometry in
-                ZStack {
-                    Rectangle()
-                        .fill(Color.black.opacity(0.5))
-                        .mask(
-                            Rectangle()
-                                .fill(Color.white)
-                                .frame(width: geometry.size.width, height: geometry.size.height)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill(Color.black)
-                                        .frame(width: targetFrame.width + 8, height: targetFrame.height + 8)
-                                        .position(x: targetFrame.midX, y: targetFrame.midY)
-                                )
-                        )
+            // Backdrop
+            Color.black.opacity(0.5)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    onDismiss()
+                }
+            
+            // Modal
+            VStack(spacing: 20) {
+                content
+                    .padding()
+                
+                HStack(spacing: 16) {
+                    Button("Skip") {
+                        onDismiss()
+                    }
+                    .foregroundColor(.secondary)
+                    
+                    Button(action: onComplete) {
+                        Text("Got it")
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                            .background(Color.blue)
+                            .cornerRadius(10)
+                    }
                 }
             }
-            
-            // Tooltip positioned near target
-            tooltip
-                .position(x: tooltipPosition.x, y: tooltipPosition.y)
+            .padding()
+            .background(Color(.systemBackground))
+            .cornerRadius(16)
+            .shadow(radius: 20)
+            .padding(40)
         }
     }
 }
@@ -307,104 +339,188 @@ struct HighlightOverlay: View {
 
 ---
 
-## Onboarding Flow (First Launch)
+## Usage Examples
 
-### Option A: Minimal (Recommended)
-**No forced onboarding.** Just contextual tutorials as user discovers features.
-
-### Option B: Quick Intro (If Needed)
-**3-screen intro, skippable:**
-
-**Screen 1:**
-```
-Welcome to Docket
-Simple task management with AI voice input
-
-[Next] [Skip]
-```
-
-**Screen 2:**
-```
-Track Progress
-Tap once to set progress
-Tap twice to complete
-
-[Next] [Skip]
-```
-
-**Screen 3:**
-```
-You're Ready
-Start adding tasks. We'll show tips as you go.
-
-[Get Started]
-```
-
----
-
-## Settings: Reset Tutorials
-
-**Location:** Profile → Settings → Reset Tips
+### TaskListView — Completion Tutorial
 
 ```swift
-Section("Help") {
-    Button("Show All Tips Again") {
-        TutorialManager.shared.resetAllTutorials()
-        // Show confirmation toast
-    }
+struct TaskListView: View {
+    @State private var showCompletionTutorial = false
     
-    NavigationLink("How to Use Docket") {
-        HelpCenterView()
+    var body: some View {
+        List {
+            ForEach(tasks) { task in
+                TaskRowView(task: task)
+            }
+        }
+        .tutorial(.completion) {
+            VStack(spacing: 16) {
+                Text("📋 Progress & Completion")
+                    .font(.headline)
+                
+                HStack(spacing: 20) {
+                    VStack {
+                        Circle()
+                            .stroke(Color.blue, lineWidth: 3)
+                            .frame(width: 44, height: 44)
+                            .overlay(Text("◐").font(.title2))
+                        Text("Tap once\nfor progress")
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
+                    }
+                    
+                    VStack {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 44, height: 44)
+                            .overlay(Image(systemName: "checkmark").foregroundColor(.white))
+                        Text("Double-tap\nto complete")
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+### VoiceRecordingView — Voice Tutorial
+
+```swift
+struct VoiceRecordingView: View {
+    var body: some View {
+        // Voice UI...
+        .tutorial(.voice) {
+            VStack(spacing: 16) {
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 48))
+                    .foregroundColor(.blue)
+                
+                Text("🎤 Speak Naturally")
+                    .font(.headline)
+                
+                Text("\"Email the client by Friday\"")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .padding(.vertical, 8)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("• Extracts task & due date")
+                    Text("• Suggests priority")
+                    Text("• Asks follow-ups if needed")
+                }
+                .font(.caption)
+                .foregroundColor(.secondary)
+            }
+        } onComplete: {
+            // Auto-start recording after tutorial
+            startRecording()
+        }
     }
 }
 ```
 
 ---
 
-## Analytics
+## Settings Integration
 
-Track tutorial effectiveness:
+Users can reset tutorials in Settings:
 
 ```swift
-Analytics.track("tutorial_shown", [
-    "tutorial_id": id,
-    "context": "first_use"
+struct SettingsView: View {
+    var body: some View {
+        Section("Tutorials") {
+            NavigationLink("Viewed Tutorials") {
+                TutorialProgressView()
+            }
+            
+            Button("Reset All Tutorials") {
+                showResetConfirmation = true
+            }
+            .foregroundColor(.red)
+        }
+    }
+}
+
+struct TutorialProgressView: View {
+    var body: some View {
+        List {
+            ForEach(TutorialManager.TutorialID.allCases, id: \.self) { tutorial in
+                HStack {
+                    Text(tutorial.title)
+                    Spacer()
+                    if tutorial.hasBeenSeen {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                    } else {
+                        Text("Not seen")
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            
+            Section {
+                Text("\(Int(TutorialManager.shared.completionPercentage))% Complete")
+                    .font(.headline)
+            }
+        }
+        .navigationTitle("Tutorials")
+    }
+}
+```
+
+---
+
+## Analytics to Track
+
+```swift
+// Tutorial events
+Analytics.track("tutorial_shown", ["id": "T2"])
+Analytics.track("tutorial_completed", ["id": "T2"])
+Analytics.track("tutorial_dismissed", ["id": "T2"])
+
+// Completion rates
+Analytics.track("tutorials_progress", [
+    "completed": completedCount,
+    "total": totalCount,
+    "percentage": completionPercentage
 ])
 
-Analytics.track("tutorial_dismissed", [
-    "tutorial_id": id,
-    "time_shown": elapsedTime,
-    "action": "got_it" // or "dismissed"
-])
-
-Analytics.track("tutorial_action_taken", [
-    "tutorial_id": id,
-    "action": "used_feature_after_tutorial"
+// Feature usage after tutorial
+Analytics.track("feature_used_after_tutorial", [
+    "tutorial": "T2",
+    "feature": "progress_slider",
+    "time_since_tutorial": "2_days"
 ])
 ```
 
-**Success Metrics:**
-- % users who see tutorial → use feature
-- Time from tutorial → feature use
-- % users who dismiss without reading
+---
+
+## Future Tutorials
+
+| Tutorial | When | Content |
+|----------|------|---------|
+| T11 | First AI mistake | "AI learns from your edits" |
+| T12 | First share accepted | "Shared tasks update in real-time" |
+| T13 | First recurring task | "Tasks repeat automatically" |
+| T14 | First widget added | "See tasks on your home screen" |
+| T15 | 30 days usage | "Pro tips: Shortcuts, Siri, Watch" |
 
 ---
 
 ## Implementation Checklist
 
-- [ ] Create TutorialState data model
-- [ ] Create TutorialManager
-- [ ] Build TooltipView component
-- [ ] Build HighlightOverlay component
-- [ ] Implement progress button tutorial
-- [ ] Implement voice recording tutorial
-- [ ] Implement task sharing tutorial
-- [ ] Add "Reset Tips" setting
+- [ ] Create `TutorialManager.swift`
+- [ ] Create `TutorialModal.swift`
+- [ ] Create `TutorialOverlay` view modifier
+- [ ] Add T2 (Completion) to TaskListView
+- [ ] Add T3 (Voice) to VoiceRecordingView
+- [ ] Add Settings > Tutorials screen
 - [ ] Add analytics tracking
-- [ ] Test all tutorials on device
-- [ ] Localization (if needed)
+- [ ] Test tutorial dismissal persists
+- [ ] Test reset functionality
 
 ---
 
-*Document created: 2026-02-10*  
-*Related: JENSEN_SUGGESTIONS_2.md (progress system)*
+*Next: Implement TutorialManager and T2 (Completion tutorial) first*
