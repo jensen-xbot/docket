@@ -1,15 +1,21 @@
 import SwiftUI
 
 struct TaskConfirmationView: View {
-    let tasks: [ParsedTask]
+    @Binding var tasks: [ParsedTask]
     let onConfirm: ([ParsedTask]) -> Void
     let onCancel: () -> Void
     
     var body: some View {
         NavigationStack {
             List {
-                ForEach(tasks) { task in
-                    TaskPreviewRow(task: task)
+                ForEach(Array(tasks.enumerated()), id: \.element.id) { index, _ in
+                    TaskPreviewRow(task: Binding(
+                        get: { tasks[index] },
+                        set: { tasks[index] = $0 }
+                    ))
+                }
+                .onDelete { indexSet in
+                    tasks.remove(atOffsets: indexSet)
                 }
             }
             .navigationTitle("Confirm Tasks")
@@ -22,6 +28,7 @@ struct TaskConfirmationView: View {
                         onConfirm(tasks)
                     }
                     .fontWeight(.semibold)
+                    .disabled(tasks.isEmpty)
                 }
             }
         }
@@ -29,12 +36,35 @@ struct TaskConfirmationView: View {
 }
 
 struct TaskPreviewRow: View {
-    let task: ParsedTask
+    @Binding var task: ParsedTask
+    @State private var isEditingTitle = false
+    @State private var isEditingCategory = false
+    @FocusState private var titleFocused: Bool
+    @FocusState private var categoryFocused: Bool
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(task.title)
-                .font(.headline)
+            // Title — tap to edit
+            if isEditingTitle {
+                TextField("Title", text: $task.title)
+                    .font(.headline)
+                    .focused($titleFocused)
+                    .onSubmit {
+                        isEditingTitle = false
+                        titleFocused = false
+                    }
+            } else {
+                Button {
+                    isEditingTitle = true
+                    titleFocused = true
+                } label: {
+                    Text(task.title)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+            }
             
             HStack(spacing: 12) {
                 if let dueDate = task.dueDate {
@@ -43,16 +73,46 @@ struct TaskPreviewRow: View {
                         .foregroundStyle(.secondary)
                 }
                 
-                if let priority = Priority.fromString(task.priority) {
-                    Label(priority.displayName, systemImage: priority.icon)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                // Priority — tap to cycle low → medium → high → low
+                Button {
+                    task.priority = nextPriority(after: task.priority)
+                } label: {
+                    if let priority = Priority.fromString(task.priority) {
+                        Label(priority.displayName, systemImage: priority.icon)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
+                .buttonStyle(.plain)
                 
-                if let category = task.category {
-                    Label(category, systemImage: "folder")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                // Category — tap to edit
+                if isEditingCategory {
+                    TextField("Category", text: Binding(
+                        get: { task.category ?? "" },
+                        set: { task.category = $0.isEmpty ? nil : $0 }
+                    ))
+                    .font(.caption)
+                    .focused($categoryFocused)
+                    .onSubmit {
+                        isEditingCategory = false
+                        categoryFocused = false
+                    }
+                } else {
+                    Button {
+                        isEditingCategory = true
+                        categoryFocused = true
+                    } label: {
+                        if let category = task.category {
+                            Label(category, systemImage: "folder")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Label("Add category", systemImage: "folder.badge.plus")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             
@@ -64,7 +124,13 @@ struct TaskPreviewRow: View {
             }
             
             if let shareWith = task.shareWith {
-                Label("Share with \(shareWith)", systemImage: "person.2")
+                let shareLabel: String = {
+                    if let email = task.resolvedShareEmail, email != shareWith {
+                        return "Share with \(shareWith) (\(email))"
+                    }
+                    return "Share with \(shareWith)"
+                }()
+                Label(shareLabel, systemImage: "person.2")
                     .font(.caption)
                     .foregroundStyle(.blue)
                     .padding(.top, 4)
@@ -79,6 +145,14 @@ struct TaskPreviewRow: View {
             }
         }
         .padding(.vertical, 4)
+    }
+    
+    private func nextPriority(after priority: String) -> String {
+        switch priority.lowercased() {
+        case "low": return "medium"
+        case "high": return "low"
+        default: return "high"
+        }
     }
     
     private func formatDate(_ date: Date) -> String {
@@ -100,22 +174,24 @@ extension Priority {
     }
 }
 
-#Preview {
-    TaskConfirmationView(
-        tasks: [
-            ParsedTask(
-                id: UUID(),
-                title: "Call Mom",
-                dueDate: Date().addingTimeInterval(86400),
-                hasTime: false,
-                priority: "high",
-                category: "Family",
-                notes: "She wants to talk about the weekend trip",
-                shareWith: nil,
-                suggestion: nil
-            )
-        ],
-        onConfirm: { _ in },
-        onCancel: { }
-    )
+struct TaskConfirmationView_Previews: PreviewProvider {
+    static var previews: some View {
+        TaskConfirmationView(
+            tasks: .constant([
+                ParsedTask(
+                    id: UUID(),
+                    title: "Call Mom",
+                    dueDate: Date().addingTimeInterval(86400),
+                    hasTime: false,
+                    priority: "high",
+                    category: "Family",
+                    notes: "She wants to talk about the weekend trip",
+                    shareWith: nil,
+                    suggestion: nil
+                )
+            ]),
+            onConfirm: { _ in },
+            onCancel: { }
+        )
+    }
 }

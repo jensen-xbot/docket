@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import _Concurrency
+import MessageUI
 
 #if DEBUG
 private enum VoiceTrace {
@@ -38,7 +39,26 @@ struct VoiceRecordingView: View {
     @State private var conversationTimeoutTask: _Concurrency.Task<Void, Never>?
     @State private var isProcessingUtterance = false
     @AppStorage("useWhisperTranscription") private var useWhisperTranscription = false
+    @AppStorage("progressTrackingDefault") private var progressTrackingDefault = false
     private let conversationTimeoutSeconds: TimeInterval = 60
+    private let appStoreURL = "https://apps.apple.com/app/docket/id0000000000"
+
+    private enum ShareMethod { case docket, email, text }
+
+    // Share confirmation flow
+    struct PendingShareConfirmation {
+        let tasks: [ParsedTask]
+        let contact: ContactRecord
+    }
+    @State private var pendingShareConfirmation: PendingShareConfirmation?
+    @State private var showMailCompose = false
+    @State private var showTextCompose = false
+    @State private var composeRecipient = ""
+    @State private var composeSubject = ""
+    @State private var composeBody = ""
+    @State private var composeEmailForRecord = ""
+    @State private var composeContactName = ""
+    @State private var createdTaskForShare: Task?
     
     /// Combines committed messages with the live transcription into a single list.
     /// The live text gets the ID "msg-N" (where N = messages.count), which is the
@@ -96,7 +116,20 @@ struct VoiceRecordingView: View {
                                             .padding(.vertical, 4)
                                             .id("tts-loading")
                                     }
-                                    
+
+                                    // Share confirmation card (inline when pending)
+                                    if let pending = pendingShareConfirmation {
+                                        ShareConfirmationCard(
+                                            contact: pending.contact,
+                                            taskTitle: pending.tasks.first?.title ?? "Task",
+                                            onDocket: { performShare(method: .docket) },
+                                            onEmail: { performShare(method: .email) },
+                                            onText: { performShare(method: .text) }
+                                        )
+                                        .padding(.horizontal)
+                                        .id("share-confirmation")
+                                    }
+
                                     // Scroll anchor
                                     Color.clear
                                         .frame(height: 1)
@@ -247,7 +280,40 @@ struct VoiceRecordingView: View {
         }
         .sheet(isPresented: $showingConfirmation) {
             if !parsedTasks.isEmpty {
-                TaskConfirmationView(tasks: parsedTasks, onConfirm: saveTasks, onCancel: { dismiss() })
+                TaskConfirmationView(tasks: $parsedTasks, onConfirm: saveTasks, onCancel: { dismiss() })
+            }
+        }
+        .sheet(isPresented: $showMailCompose) {
+            MailComposeView(
+                recipient: composeRecipient,
+                subject: composeSubject,
+                body: composeBody
+            ) { result in
+                showMailCompose = false
+                if case .sent = result, let task = createdTaskForShare {
+                    recordShare(taskId: task.id, recipient: composeEmailForRecord)
+                    let name = composeContactName.isEmpty ? composeEmailForRecord : composeContactName
+                    ttsManager.speak("Shared with \(name) via email.") { }
+                }
+                createdTaskForShare = nil
+                pendingShareConfirmation = nil
+                askAnythingElse()
+            }
+        }
+        .sheet(isPresented: $showTextCompose) {
+            TextComposeView(
+                recipient: composeRecipient,
+                body: composeBody
+            ) { result in
+                showTextCompose = false
+                if case .sent = result, let task = createdTaskForShare {
+                    recordShare(taskId: task.id, recipient: composeEmailForRecord)
+                    let name = composeContactName.isEmpty ? composeEmailForRecord : composeContactName
+                    ttsManager.speak("Shared with \(name) via text.") { }
+                }
+                createdTaskForShare = nil
+                pendingShareConfirmation = nil
+                askAnythingElse()
             }
         }
     }
@@ -497,7 +563,9 @@ struct VoiceRecordingView: View {
                 dueDate: dueDateString,
                 priority: priorityString,
                 category: task.category,
-                isCompleted: task.isCompleted
+                isCompleted: task.isCompleted,
+                progressPercentage: task.progressPercentage,
+                isProgressEnabled: task.isProgressEnabled
             )
         }
     }
@@ -555,6 +623,37 @@ struct VoiceRecordingView: View {
                     for t in parsedTasks { print("[Voice]   corrected task: \(t.title)") }
                     for t in lastSavedTasks { print("[Voice]   saved task: \(t.title)") }
                 }
+
+                // Share confirmation flow: when any task has shareWith (and not a correction)
+                if !isCorrection, let firstShareWith = parsedTasks.first(where: { $0.shareWith != nil })?.shareWith {
+                    let contact = await resolveContact(nameOrEmail: firstShareWith)
+                    if let contact = contact {
+                        // Show confirmation card
+                        pendingShareConfirmation = PendingShareConfirmation(tasks: parsedTasks, contact: contact)
+                        let confirmText = "I'll share this with \(contact.contactName ?? contact.contactEmail). How would you like to send it? Docket, email, or text."
+                        ttsManager.speakWithBoundedSync(text: confirmText, boundedWait: 0.75, onTextReveal: { [self] in
+                            state = .speaking
+                            messages.append(ConversationMessage(role: "assistant", content: confirmText))
+                        }, onFinish: { [self] in
+                            state = .complete
+                        })
+                        return
+                    } else {
+                        // No match — speak error, show in chat, then save without share
+                        var tasksToSave = parsedTasks
+                        for i in tasksToSave.indices where tasksToSave[i].shareWith == firstShareWith {
+                            tasksToSave[i].shareWith = nil
+                        }
+                        let errorText = "I couldn't find \(firstShareWith) in your contacts. I'll add the task without sharing."
+                        ttsManager.speakWithBoundedSync(text: errorText, boundedWait: 0.75, onTextReveal: { [self] in
+                            messages.append(ConversationMessage(role: "assistant", content: errorText))
+                            state = .speaking
+                        }, onFinish: { [self] in
+                            saveTasks(tasksToSave)
+                        })
+                        return
+                    }
+                }
                 
                 if let summary = response.summary {
                     #if DEBUG
@@ -581,7 +680,16 @@ struct VoiceRecordingView: View {
                     if isCorrection {
                         updateSavedTasks(with: parsedTasks)
                     } else {
-                        // No summary — show confirmation UI
+                        // Resolve share names before showing confirmation
+                        for i in parsedTasks.indices {
+                            if let shareWith = parsedTasks[i].shareWith {
+                                if shareWith.contains("@") {
+                                    parsedTasks[i].resolvedShareEmail = shareWith.lowercased()
+                                } else {
+                                    parsedTasks[i].resolvedShareEmail = await resolveNameToEmail(shareWith)
+                                }
+                            }
+                        }
                         showingConfirmation = true
                         state = .complete
                     }
@@ -649,7 +757,8 @@ struct VoiceRecordingView: View {
                     priority: priority,
                     category: parsedTask.category,
                     notes: parsedTask.notes,
-                    syncStatus: .pending
+                    syncStatus: .pending,
+                    isProgressEnabled: progressTrackingDefault
                 )
                 
                 // Handle checklist items
@@ -844,7 +953,17 @@ struct VoiceRecordingView: View {
                 sharedWithEmail = shareWith.lowercased()
             } else {
                 // Try to resolve name to email from contacts
-                sharedWithEmail = await resolveNameToEmail(shareWith) ?? shareWith.lowercased()
+                if let resolved = await resolveNameToEmail(shareWith) {
+                    sharedWithEmail = resolved
+                } else {
+                    // Name not found — speak TTS feedback
+                    await MainActor.run {
+                        ttsManager.speak("I couldn't find \(shareWith) in your contacts.") {
+                            // No-op on finish
+                        }
+                    }
+                    sharedWithEmail = shareWith.lowercased() // use as fallback for invite
+                }
             }
             
             struct TaskShareInsert: Codable {
@@ -879,32 +998,181 @@ struct VoiceRecordingView: View {
     }
     
     private func resolveNameToEmail(_ name: String) async -> String? {
+        await resolveContact(nameOrEmail: name)?.contactEmail
+    }
+
+    /// Resolves a name or email to a ContactRecord using fuzzy matching.
+    private func resolveContact(nameOrEmail: String) async -> ContactRecord? {
         do {
-            // Query contacts table for matching name
-            struct ContactRecord: Codable {
-                let contactEmail: String
-                
-                enum CodingKeys: String, CodingKey {
-                    case contactEmail = "contact_email"
-                }
-            }
-            
             let session = try await SupabaseConfig.client.auth.session
             let userId = session.user.id.uuidString
-            
             let contacts: [ContactRecord] = try await SupabaseConfig.client
                 .from("contacts")
-                .select("contact_email")
+                .select()
                 .eq("user_id", value: userId)
-                .ilike("contact_name", pattern: name)
-                .limit(1)
+                .order("created_at", ascending: false)
                 .execute()
                 .value
-            
-            return contacts.first?.contactEmail
+
+            let trimmed = nameOrEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.contains("@") {
+                return contacts.first { $0.contactEmail.lowercased() == trimmed.lowercased() }
+            }
+            return FuzzyContactMatcher.resolveContact(name: trimmed, from: contacts)
         } catch {
             return nil
         }
+    }
+
+    private func performShare(method: ShareMethod) {
+        guard let pending = pendingShareConfirmation else { return }
+        let contact = pending.contact
+        let tasks = pending.tasks
+
+        _Concurrency.Task {
+            var savedTasks: [Task] = []
+            for parsedTask in tasks {
+                let priority: Priority = {
+                    switch parsedTask.priority.lowercased() {
+                    case "low": return .low
+                    case "high": return .high
+                    default: return .medium
+                    }
+                }()
+                let task = Task(
+                    title: parsedTask.title,
+                    dueDate: parsedTask.dueDate,
+                    hasTime: parsedTask.hasTime,
+                    priority: priority,
+                    category: parsedTask.category,
+                    notes: parsedTask.notes,
+                    syncStatus: .pending,
+                    isProgressEnabled: progressTrackingDefault
+                )
+                if let templateName = parsedTask.useTemplate,
+                   let store = groceryStores.first(where: { $0.name.localizedCaseInsensitiveContains(templateName) }) {
+                    task.checklistItems = store.items.enumerated().map { index, name in
+                        ChecklistItem(id: UUID(), name: name, isChecked: false, sortOrder: index, quantity: 1, isStarred: false)
+                    }
+                } else if let itemNames = parsedTask.checklistItems, !itemNames.isEmpty {
+                    task.checklistItems = itemNames.enumerated().map { index, name in
+                        let capitalizedName = name.split(separator: " ")
+                            .map { $0.prefix(1).uppercased() + $0.dropFirst().lowercased() }
+                            .joined(separator: " ")
+                        return ChecklistItem(id: UUID(), name: capitalizedName, isChecked: false, sortOrder: index, quantity: 1, isStarred: false)
+                    }
+                }
+                modelContext.insert(task)
+                savedTasks.append(task)
+                if parsedTask.dueDate != nil {
+                    await NotificationManager.shared.scheduleNotification(for: task)
+                }
+                await syncEngine.pushTask(task)
+            }
+            try? modelContext.save()
+            await MainActor.run {
+                lastSavedTasks = savedTasks
+                parsedTasks = []
+            }
+
+            let taskTitle = tasks.first?.title ?? "Task"
+            let userExists = await checkUserExists(email: contact.contactEmail)
+            let firstName = contact.contactName ?? contact.contactEmail
+
+            switch method {
+            case .docket:
+                if contact.contactUserId != nil, let task = savedTasks.first {
+                    await createShare(for: task, shareWith: contact.contactEmail)
+                    await MainActor.run {
+                        pendingShareConfirmation = nil
+                        ttsManager.speak("Shared with \(firstName) on Docket.") { }
+                        askAnythingElse()
+                    }
+                }
+            case .email:
+                let body = userExists
+                    ? "I shared \"\(taskTitle)\" with you on Docket. Open the app to see it!\n\n\(appStoreURL)"
+                    : "I shared \"\(taskTitle)\" with you on Docket. Download the app to see it: \(appStoreURL)"
+                await MainActor.run {
+                    composeRecipient = contact.contactEmail
+                    composeSubject = "Task shared: \(taskTitle)"
+                    composeBody = body
+                    composeEmailForRecord = contact.contactEmail
+                    composeContactName = contact.contactName ?? contact.contactEmail
+                    createdTaskForShare = savedTasks.first
+                    showMailCompose = true
+                    pendingShareConfirmation = nil
+                }
+            case .text:
+                let phone = (contact.contactPhone ?? "").strippedPhoneNumber
+                guard !phone.isEmpty else { return }
+                let body = userExists
+                    ? "I shared \"\(taskTitle)\" with you on Docket. Open the app to see it!\n\(appStoreURL)"
+                    : "I shared \"\(taskTitle)\" with you on Docket. Download the app to see it: \(appStoreURL)"
+                await MainActor.run {
+                    composeRecipient = phone
+                    composeBody = body
+                    composeEmailForRecord = contact.contactEmail
+                    composeContactName = contact.contactName ?? contact.contactEmail
+                    createdTaskForShare = savedTasks.first
+                    showTextCompose = true
+                    pendingShareConfirmation = nil
+                }
+            }
+        }
+    }
+
+    private func checkUserExists(email: String) async -> Bool {
+        guard !email.isEmpty else { return false }
+        do {
+            struct UserLookup: Codable { let id: UUID }
+            let result: [UserLookup] = try await SupabaseConfig.client
+                .from("user_profiles")
+                .select("id")
+                .eq("email", value: email.lowercased())
+                .limit(1)
+                .execute()
+                .value
+            return !result.isEmpty
+        } catch { return false }
+    }
+
+    private func recordShare(taskId: UUID, recipient: String) {
+        _Concurrency.Task {
+            do {
+                let session = try await SupabaseConfig.client.auth.session
+                let ownerId = session.user.id.uuidString
+                struct TaskShareInsert: Codable {
+                    let taskId: UUID
+                    let ownerId: String
+                    let sharedWithEmail: String
+                    let status: String
+                    enum CodingKeys: String, CodingKey {
+                        case taskId = "task_id"
+                        case ownerId = "owner_id"
+                        case sharedWithEmail = "shared_with_email"
+                        case status
+                    }
+                }
+                try await SupabaseConfig.client
+                    .from("task_shares")
+                    .insert(TaskShareInsert(taskId: taskId, ownerId: ownerId, sharedWithEmail: recipient, status: "pending"))
+                    .execute()
+            } catch {
+                print("[Voice] recordShare failed: \(error)")
+            }
+        }
+    }
+
+    private func askAnythingElse() {
+        let followUp = "Anything else?"
+        ttsManager.speakWithBoundedSync(text: followUp, boundedWait: 0.75, onTextReveal: { [self] in
+            messages.append(ConversationMessage(role: "assistant", content: followUp))
+            state = .speaking
+        }, onFinish: { [self] in
+            state = .listening
+            _Concurrency.Task { await speechManager.startRecording() }
+        })
     }
     
     /// Handles "update" response type - modifies an existing task
@@ -973,6 +1241,15 @@ struct VoiceRecordingView: View {
         
         if let isPinned = changes.isPinned {
             task.isPinned = isPinned
+        }
+        
+        if let progress = changes.progressPercentage {
+            task.progressPercentage = min(max(progress, 0), 100)
+            task.lastProgressUpdate = Date()
+            if progress >= 100 {
+                task.isCompleted = true
+                task.completedAt = Date()
+            }
         }
         
         // Handle checklist operations

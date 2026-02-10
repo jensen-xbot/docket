@@ -29,6 +29,8 @@ struct AddTaskView: View {
     @FocusState private var notesFocused: Bool
     
     @State private var storeStore = StoreStore()
+    @AppStorage("progressTrackingDefault") private var progressTrackingDefault = false
+    @State private var isProgressEnabled: Bool = false
     
     private var isValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -105,6 +107,12 @@ struct AddTaskView: View {
                             }
                         }
                     }
+                    
+                    // Progress Tracking
+                    Toggle(isOn: $isProgressEnabled) {
+                        Label("Track Progress", systemImage: "chart.bar.fill")
+                    }
+                    .tint(.blue)
                     
                     Divider()
                     
@@ -206,6 +214,7 @@ struct AddTaskView: View {
             }
             .onAppear {
                 titleFocused = true
+                isProgressEnabled = progressTrackingDefault
             }
             .sheet(isPresented: $showSaveTemplate) {
                 TemplateNameSheet(
@@ -247,7 +256,8 @@ struct AddTaskView: View {
             category: category.isEmpty ? nil : category,
             notes: notes.isEmpty ? nil : notes,
             checklistItems: checklistItems.isEmpty ? nil : checklistItems,
-            syncStatus: .pending
+            syncStatus: .pending,
+            isProgressEnabled: isProgressEnabled
         )
         
         if isChecklistCategory && !checklistItems.isEmpty {

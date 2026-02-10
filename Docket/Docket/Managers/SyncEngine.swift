@@ -102,6 +102,9 @@ class SyncEngine {
                         existing.isPinned = dto.isPinned
                         existing.sortOrder = dto.sortOrder
                         existing.checklistItems = dto.checklistItems
+                        existing.progressPercentage = dto.progressPercentage
+                        existing.isProgressEnabled = dto.isProgressEnabled
+                        existing.lastProgressUpdate = dto.lastProgressUpdate
                         existing.isShared = false
                         existing.updatedAt = dto.updatedAt
                         existing.syncStatus = SyncStatus.synced.rawValue
@@ -137,6 +140,9 @@ class SyncEngine {
                         existing.isPinned = dto.isPinned
                         existing.sortOrder = dto.sortOrder
                         existing.checklistItems = dto.checklistItems
+                        existing.progressPercentage = dto.progressPercentage
+                        existing.isProgressEnabled = dto.isProgressEnabled
+                        existing.lastProgressUpdate = dto.lastProgressUpdate
                         existing.isShared = true
                         existing.updatedAt = dto.updatedAt
                         existing.syncStatus = SyncStatus.synced.rawValue
@@ -263,17 +269,25 @@ class SyncEngine {
             let session = try await supabase.auth.session
             let currentUserId = session.user.id.uuidString
             
-            // For shared tasks, preserve the original owner's userId
-            // For owned tasks, use current user's ID
-            let userId = task.isShared && task.userId != nil ? task.userId! : currentUserId
-            
             task.updatedAt = Date()
-            let dto = TaskDTO(from: task, userId: userId)
             
-            try await supabase
-                .from("tasks")
-                .upsert(dto, onConflict: "id")
-                .execute()
+            // Shared tasks (owned by someone else) already exist remotely —
+            // use UPDATE so we go through the "Recipients can update" RLS policy
+            // instead of INSERT, which requires auth.uid() = user_id.
+            if task.isShared, let ownerId = task.userId, ownerId != currentUserId {
+                let dto = TaskDTO(from: task, userId: ownerId)
+                try await supabase
+                    .from("tasks")
+                    .update(dto)
+                    .eq("id", value: task.id.uuidString)
+                    .execute()
+            } else {
+                let dto = TaskDTO(from: task, userId: currentUserId)
+                try await supabase
+                    .from("tasks")
+                    .upsert(dto, onConflict: "id")
+                    .execute()
+            }
             
             task.syncStatus = SyncStatus.synced.rawValue
             try? modelContext.save()

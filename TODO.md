@@ -91,21 +91,21 @@
 - [x] Test power-user: full utterance -> instant task creation (no follow-ups)
 - [x] English only for v1.1
 
-### Phase 8: Confirmation + Continuation - MOSTLY COMPLETE
+### Phase 8: Confirmation + Continuation - COMPLETE
 - [x] Wire up: conversation complete -> auto-save if no "?" in summary
 - [x] Voice confirmation: listen for "yes" / "add it" after AI asks "Want me to add?"
 - [x] "Anything else?" flow: after saving, ask if user wants to add more tasks
 - [x] Dismissal detection: "no" / "that's all" / "I'm done" closes voice view
 - [x] Integrate voice-created tasks into synced model (SwiftData + SyncEngine push)
-- [ ] Build TaskConfirmationView polish (notes + share target display, inline editing)
-- [ ] Share resolution flow (name -> email via contacts cache or inline prompt)
+- [x] Build TaskConfirmationView polish (notes + share target display, inline editing)
+- [x] Share resolution flow (name -> email via contacts cache or inline prompt)
 - [x] Handle corrections mid-conversation ("actually make it Wednesday")
   - [x] Pre-save corrections: say correction before confirmation → AI returns updated tasks
   - [x] Post-save corrections: say correction after "Anything else?" → updates existing task in SwiftData + Supabase
   - [x] Word boundary matching for yes/no/dismiss detection (prevents "note" matching "no")
 - [x] TTS mute toggle in Settings
 
-### Phase 9: Voice Polish — MOSTLY COMPLETE
+### Phase 9: Voice Polish — COMPLETE
 - [x] Upgrade TTS to OpenAI TTS API (tts-1, ~$0.0015/response) — natural-sounding voices replace robotic AVSpeechSynthesizer
   - [x] Edge Function `text-to-speech` calls OpenAI TTS API, returns MP3 audio
   - [x] TTSManager uses AVAudioPlayer for OpenAI TTS, keeps AVSpeechSynthesizer as fallback
@@ -126,7 +126,7 @@
   - [x] Red breathing mic button with phaseAnimator (restarts reliably on every listen cycle)
   - [x] Green audio-level indicator inside mic icon (RMS + EMA smoothing at ~12fps)
   - [x] Double-processing guard (isProcessingUtterance flag)
-- [ ] Siri Shortcuts integration
+- [x] Siri Shortcuts integration
 - [ ] Advanced parsing (recurring tasks, subtasks)
 
 ### Phase 10: Personalization Adaptation (v1.2 Foundation)
@@ -145,12 +145,12 @@
   - [ ] personalization hit rate (alias/mapping applied)
 
 ### Pre-Launch Hardening
-- [ ] Edge Function rate limiting (prevent abuse/runaway costs — 60 req/hr/user)
-- [ ] Edge Function request timeout (15s abort controller — prevents hanging requests)
+- [x] Edge Function rate limiting (prevent abuse/runaway costs — 60 req/hr/user)
+- [x] Edge Function request timeout (15s abort controller — prevents hanging requests)
 - [ ] Transcription retry logic (auto-retry on transient SFSpeechRecognizer failures, max 2 retries)
 - [ ] Haptic refinement (distinct patterns: success, correction, error, speech detected)
 - [ ] Audio waveform visualization (animate bars with voice level during recording)
-- [ ] Privacy manifest (required for App Store since 2024)
+- [x] Privacy manifest (required for App Store since 2024)
 - [ ] Accessibility audit (VoiceOver on VoiceRecordingView, 44pt tap targets, Reduce Motion)
 - [ ] Pre-launch test matrix:
   - [ ] Network offline during voice → offline indicator, queue for retry
@@ -196,6 +196,21 @@
   - [ ] Both users edit same task → LWW converges on both devices
   - [ ] Push notification → opens correct destination; badge updates
   - [ ] Manual QA: owner/recipient × online/offline/reconnect
+
+## v1.3: Task Progress System
+
+- [ ] Data model: Add `progressPercentage`, `isProgressEnabled`, `lastProgressUpdate` to Task + TaskDTO
+- [ ] Supabase migration: `012_add_progress_tracking.sql` (progress columns + shared task Realtime trigger)
+- [ ] SyncEngine: Include progress fields in push/pull
+- [ ] Profile: "Track progress by default" toggle in Tasks section
+- [ ] AddTaskView / EditTaskView: Per-task progress toggle (after category, before checklist/title)
+- [ ] ProgressRing: Circular indicator with color coding (grey 0-25, blue 26-99, green 100)
+- [ ] ProgressBar: Separator bar fill with percentage text
+- [ ] ProgressSlider: Expandable 0-100% slider (single tap to reveal)
+- [ ] TaskRowView: Progress ring/bar when enabled; single tap → slider, double tap → complete
+- [ ] Voice: TaskContext + TaskChanges include progress; Edge Function prompt for progress voice commands
+- [ ] Voice: saveTasks() + update handler apply progressTrackingDefault and progressPercentage
+- [ ] Shared tasks: Both users see and update progress; Realtime trigger propagates to recipient
 
 ## Future / v2.0
 - [x] Voice-aware grocery lists
@@ -277,9 +292,6 @@
 - See [VOICE-TO-TASK-PLAN.md](VOICE-TO-TASK-PLAN.md) for voice details
 
 ## Next Steps
-1. Polish TaskConfirmationView (inline editing, share targets)
-2. Share resolution (voice "share with Sarah" -> contacts lookup)
-3. Siri Shortcuts integration
-4. Advanced parsing (recurring tasks, subtasks)
-5. App Store submission (see APP-STORE-GUIDE.md)
-6. See [VOICE-TO-TASK-V2.md](VOICE-TO-TASK-V2.md) for full architecture
+1. Advanced parsing (recurring tasks, subtasks)
+2. App Store submission (see APP-STORE-GUIDE.md)
+3. See [VOICE-TO-TASK-V2.md](VOICE-TO-TASK-V2.md) for full architecture

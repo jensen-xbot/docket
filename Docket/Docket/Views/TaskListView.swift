@@ -59,12 +59,14 @@ struct TaskListView: View {
     @State private var viewModel = TaskListViewModel()
     @State private var showingAddTask = false
     @State private var showingVoiceRecording = false
+    @AppStorage("openVoiceRecordingFromShortcut") private var openVoiceRecordingFromShortcut = false
     @State private var taskToEdit: Task?
     @State private var taskToShare: Task?
     @State private var currentUserProfile: UserProfile?
     @State private var pendingTaskId: UUID?
     @State private var showContactsForInvite = false
     @State private var unreadNotificationCount = 0
+    @State private var activeProgressTaskId: UUID?
     
     private var filteredTasks: [Task] {
         viewModel.filteredTasks(from: allTasks)
@@ -89,6 +91,12 @@ struct TaskListView: View {
                     await loadUnreadNotificationCount()
                 }
                 .onAppear(perform: onViewAppear)
+                .onChange(of: openVoiceRecordingFromShortcut) { _, shouldOpen in
+                    if shouldOpen {
+                        showingVoiceRecording = true
+                        openVoiceRecordingFromShortcut = false
+                    }
+                }
                 .onChange(of: taskToShare) { _, newValue in
                     if newValue == nil {
                         _Concurrency.Task { await syncAll() }
@@ -238,6 +246,10 @@ struct TaskListView: View {
     }
     
     private func onViewAppear() {
+        if openVoiceRecordingFromShortcut {
+            showingVoiceRecording = true
+            openVoiceRecordingFromShortcut = false
+        }
         _Concurrency.Task {
             await syncAll()
             await loadCurrentUserProfile()
@@ -330,10 +342,15 @@ struct TaskListView: View {
             onShare: { taskToShare = task },
             currentUserProfile: currentUserProfile,
             sharerProfile: profile,
-            sharedWithProfiles: sharedWith
+            sharedWithProfiles: sharedWith,
+            activeProgressTaskId: $activeProgressTaskId
         )
         .contentShape(Rectangle())
-        .onTapGesture { taskToEdit = task }
+        .onTapGesture {
+            // Dismiss any open slider when tapping a row to edit
+            activeProgressTaskId = nil
+            taskToEdit = task
+        }
         .swipeActions(edge: .leading) {
             completeSwipeButton(for: task)
         }

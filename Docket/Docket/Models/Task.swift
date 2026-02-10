@@ -27,6 +27,11 @@ class Task {
     var syncStatus: Int // SyncStatus rawValue
     var updatedAt: Date
     
+    // Progress tracking (v1.3)
+    var progressPercentage: Double = 0.0 // 0.0 - 100.0
+    var isProgressEnabled: Bool = false // per-task toggle
+    var lastProgressUpdate: Date?
+    
     var checklistItems: [ChecklistItem]? {
         get {
             guard let data = checklistItemsData else { return nil }
@@ -58,7 +63,10 @@ class Task {
         checklistItems: [ChecklistItem]? = nil,
         isShared: Bool = false,
         syncStatus: SyncStatus = .pending,
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        progressPercentage: Double = 0.0,
+        isProgressEnabled: Bool = false,
+        lastProgressUpdate: Date? = nil
     ) {
         self.id = id
         self.userId = userId
@@ -81,6 +89,9 @@ class Task {
         self.isShared = isShared
         self.syncStatus = syncStatus.rawValue
         self.updatedAt = updatedAt
+        self.progressPercentage = progressPercentage
+        self.isProgressEnabled = isProgressEnabled
+        self.lastProgressUpdate = lastProgressUpdate
     }
     
     var syncStatusEnum: SyncStatus {
@@ -118,6 +129,9 @@ struct TaskDTO: Codable {
     let sortOrder: Int
     let checklistItems: [ChecklistItem]?
     let updatedAt: Date
+    var progressPercentage: Double
+    var isProgressEnabled: Bool
+    var lastProgressUpdate: Date?
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -135,6 +149,53 @@ struct TaskDTO: Codable {
         case sortOrder = "sort_order"
         case checklistItems = "checklist_items"
         case updatedAt = "updated_at"
+        case progressPercentage = "progress_percentage"
+        case isProgressEnabled = "is_progress_enabled"
+        case lastProgressUpdate = "last_progress_update"
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        userId = try container.decode(String.self, forKey: .userId)
+        title = try container.decode(String.self, forKey: .title)
+        isCompleted = try container.decode(Bool.self, forKey: .isCompleted)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        dueDate = try container.decodeIfPresent(Date.self, forKey: .dueDate)
+        hasTime = try container.decodeIfPresent(Bool.self, forKey: .hasTime) ?? false
+        priority = try container.decode(String.self, forKey: .priority)
+        category = try container.decodeIfPresent(String.self, forKey: .category)
+        notes = try container.decodeIfPresent(String.self, forKey: .notes)
+        completedAt = try container.decodeIfPresent(Date.self, forKey: .completedAt)
+        isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+        sortOrder = try container.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
+        checklistItems = try container.decodeIfPresent([ChecklistItem].self, forKey: .checklistItems)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        progressPercentage = try container.decodeIfPresent(Double.self, forKey: .progressPercentage) ?? 0.0
+        isProgressEnabled = try container.decodeIfPresent(Bool.self, forKey: .isProgressEnabled) ?? false
+        lastProgressUpdate = try container.decodeIfPresent(Date.self, forKey: .lastProgressUpdate)
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(userId, forKey: .userId)
+        try container.encode(title, forKey: .title)
+        try container.encode(isCompleted, forKey: .isCompleted)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encodeIfPresent(dueDate, forKey: .dueDate)
+        try container.encode(hasTime, forKey: .hasTime)
+        try container.encode(priority, forKey: .priority)
+        try container.encodeIfPresent(category, forKey: .category)
+        try container.encodeIfPresent(notes, forKey: .notes)
+        try container.encodeIfPresent(completedAt, forKey: .completedAt)
+        try container.encode(isPinned, forKey: .isPinned)
+        try container.encode(sortOrder, forKey: .sortOrder)
+        try container.encodeIfPresent(checklistItems, forKey: .checklistItems)
+        try container.encode(updatedAt, forKey: .updatedAt)
+        try container.encode(progressPercentage, forKey: .progressPercentage)
+        try container.encode(isProgressEnabled, forKey: .isProgressEnabled)
+        try container.encodeIfPresent(lastProgressUpdate, forKey: .lastProgressUpdate)
     }
     
     init(from task: Task, userId: String) {
@@ -153,6 +214,9 @@ struct TaskDTO: Codable {
         self.sortOrder = task.sortOrder
         self.checklistItems = task.checklistItems
         self.updatedAt = task.updatedAt
+        self.progressPercentage = task.progressPercentage
+        self.isProgressEnabled = task.isProgressEnabled
+        self.lastProgressUpdate = task.lastProgressUpdate
     }
     
     func toTask() -> Task {
@@ -180,7 +244,10 @@ struct TaskDTO: Codable {
             sortOrder: sortOrder,
             checklistItems: checklistItems,
             syncStatus: .synced,
-            updatedAt: updatedAt
+            updatedAt: updatedAt,
+            progressPercentage: progressPercentage,
+            isProgressEnabled: isProgressEnabled,
+            lastProgressUpdate: lastProgressUpdate
         )
     }
 }

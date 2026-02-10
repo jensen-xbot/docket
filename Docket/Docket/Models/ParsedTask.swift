@@ -9,6 +9,7 @@ struct ParsedTask: Codable, Identifiable {
     var category: String?
     var notes: String?
     var shareWith: String? // email or display name
+    var resolvedShareEmail: String? // resolved email for display (set client-side, not from API)
     var suggestion: String?
     var checklistItems: [String]? // AI-suggested item names (ad-hoc grocery list)
     var useTemplate: String? // store name whose template to load (template-based grocery list)
@@ -49,6 +50,8 @@ struct TaskContext: Codable {
     let priority: String // "low", "medium", "high"
     let category: String?
     let isCompleted: Bool
+    let progressPercentage: Double
+    let isProgressEnabled: Bool
 }
 
 /// Context about a grocery store template, sent to Edge Function for awareness
@@ -72,6 +75,7 @@ struct TaskChanges: Codable {
     var unstarChecklistItems: [String]? // Unstar items
     var checkChecklistItems: [String]? // Check items (mark as done)
     var uncheckChecklistItems: [String]? // Uncheck items
+    var progressPercentage: Double? // "set progress on X to 75%"
     
     /// Decodes dueDate string to Date + hasTime flag
     func decodeDueDate() -> (date: Date?, hasTime: Bool) {
@@ -157,6 +161,7 @@ extension ParsedTask {
         category = try container.decodeIfPresent(String.self, forKey: .category)
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
         shareWith = try container.decodeIfPresent(String.self, forKey: .shareWith)
+        resolvedShareEmail = nil // set client-side when resolving name to email
         suggestion = try container.decodeIfPresent(String.self, forKey: .suggestion)
         checklistItems = try container.decodeIfPresent([String].self, forKey: .checklistItems)
         useTemplate = try container.decodeIfPresent(String.self, forKey: .useTemplate)

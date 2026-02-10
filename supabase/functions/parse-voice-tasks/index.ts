@@ -26,6 +26,8 @@ interface TaskContext {
   priority: "low" | "medium" | "high";
   category?: string;
   isCompleted: boolean;
+  progressPercentage: number;
+  isProgressEnabled: boolean;
 }
 
 interface TaskChanges {
@@ -42,6 +44,7 @@ interface TaskChanges {
   unstarChecklistItems?: string[]; // Unstar items
   checkChecklistItems?: string[]; // Check items (mark as done)
   uncheckChecklistItems?: string[]; // Uncheck items
+  progressPercentage?: number; // "set progress on X to 75%", "update my report to 50% done"
 }
 
 interface GroceryStoreContext {
@@ -82,7 +85,8 @@ Behavior:
   - "check off milk" or "mark milk as done" → checkChecklistItems: ["milk"]
   - "uncheck milk" → uncheckChecklistItems: ["milk"]
 - PINNING: "pin this task" or "pin the grocery task" → isPinned: true, "unpin it" → isPinned: false
-- If the user asks about their tasks ("what do I have tomorrow?", "show me my tasks"), return type "question" with a helpful summary listing matching tasks from the context.
+- PROGRESS: When the user wants to set progress on a task ("set progress on my report to 75%", "update the dentist task to 50% done", "I'm halfway through the client email"), return type "update" with changes.progressPercentage set to the number (0-100). If they say "how far along am I on X?" and the task has isProgressEnabled, include the progress in your answer from the context.
+- If the user asks about their tasks ("what do I have tomorrow?", "show me my tasks"), return type "question" with a helpful summary listing matching tasks from the context. When listing tasks that have isProgressEnabled, include the progress percentage (e.g., "Report is 45% done").
 - If the user wants to CREATE a new task and provides enough info, return type "complete" with structured tasks and a TTS summary.
 - If the user wants to UPDATE an existing task (mark done, change date, change priority, add notes, modify checklist, pin/unpin), return type "update" with the taskId and changes.
 - If the user wants to DELETE a task, return type "delete" with the taskId.
@@ -103,8 +107,8 @@ Response format — ALWAYS one of these four:
 2. Completed task(s) (new tasks):
 {"type": "complete", "tasks": [...], "summary": "TTS readback sentence"}
 
-3. Update existing task (change fields, mark done/complete, modify checklist, pin/unpin, etc.):
-{"type": "update", "taskId": "uuid-of-existing-task", "changes": {"priority": "high", "dueDate": "2026-02-10", "isPinned": true, "addChecklistItems": ["banana"], "starChecklistItems": ["milk"], ...}, "summary": "I've updated the task"}
+3. Update existing task (change fields, mark done/complete, modify checklist, pin/unpin, progress, etc.):
+{"type": "update", "taskId": "uuid-of-existing-task", "changes": {"priority": "high", "dueDate": "2026-02-10", "isPinned": true, "progressPercentage": 75, "addChecklistItems": ["banana"], "starChecklistItems": ["milk"], ...}, "summary": "I've updated the task"}
 
 4. Mark task as done/complete (this is an UPDATE, NOT type "complete"):
 {"type": "update", "taskId": "uuid-of-existing-task", "changes": {"isCompleted": true}, "summary": "I've marked X as done"}
@@ -120,7 +124,7 @@ For each task in a "complete" response, return:
 - priority: "low", "medium", or "high"
 - category: Suggested category or null (always set to "Groceries" for grocery tasks)
 - notes: Additional context/details from the user, or null
-- shareWith: Email or display name to share with, or null
+- shareWith: Email or display name to share with, or null. When shareWith is present, the summary MUST ask for confirmation — do NOT say "Done!" or "Added!". Use: "I'll share this with [name]. How would you like to send it? Docket, email, or text." This lets the user choose the share method before the task is created.
 - suggestion: Optional improvement note for the user
 - checklistItems: Array of item names (only for ad-hoc grocery lists, e.g., ["milk", "eggs", "bread"])
 - useTemplate: Store name whose template to load (only when user confirms using a template, e.g., "Costco")
@@ -137,6 +141,29 @@ Extraction rules:
 - Do NOT fabricate notes or sharing intent — only extract what was said
 
 Return valid JSON only. No markdown, no explanation.`;
+
+// Simple in-memory rate limit: 60 requests per hour per user
+const RATE_LIMIT = 60;
+const WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const rateLimitMap = new Map<string, { count: number; windowStart: number }>();
+
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(userId);
+  if (!entry) {
+    rateLimitMap.set(userId, { count: 1, windowStart: now });
+    return true;
+  }
+  if (now - entry.windowStart > WINDOW_MS) {
+    rateLimitMap.set(userId, { count: 1, windowStart: now });
+    return true;
+  }
+  if (entry.count >= RATE_LIMIT) {
+    return false;
+  }
+  entry.count++;
+  return true;
+}
 
 Deno.serve(async (req: Request) => {
   // CORS headers
@@ -179,6 +206,15 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Rate limit: 60 requests per hour per user
+    const userId = user.id;
+    if (!checkRateLimit(userId)) {
+      return new Response(
+        JSON.stringify({ error: "Rate limit exceeded. Try again later." }),
+        { status: 429, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
     // Parse request body
     const body: ParseRequest = await req.json();
     const { messages, today, timezone, contacts, existingTasks, groceryStores } = body;
@@ -209,7 +245,8 @@ Deno.serve(async (req: Request) => {
         const dueDateStr = t.dueDate ? ` (due: ${t.dueDate})` : "";
         const categoryStr = t.category ? ` [${t.category}]` : "";
         const statusStr = t.isCompleted ? " [completed]" : "";
-        return `- ${t.title}${dueDateStr}${categoryStr}${statusStr} (id: ${t.id})`;
+        const progressStr = t.isProgressEnabled ? ` [${t.progressPercentage}% progress]` : "";
+        return `- ${t.title}${dueDateStr}${categoryStr}${progressStr}${statusStr} (id: ${t.id})`;
       }).join("\n");
       
       systemContent += `\n\nUser's existing tasks:\n${taskList}\n\nWhen the user asks to modify, complete, or delete a task, match it by title and use the task's id in your response.`;
@@ -235,22 +272,38 @@ Deno.serve(async (req: Request) => {
       })),
     ];
 
-    // Call OpenRouter
-    const openRouterResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${openRouterApiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": supabaseUrl, // Optional: for OpenRouter analytics
-        "X-Title": "Docket Voice Assistant",
-      },
-      body: JSON.stringify({
-        model,
-        messages: chatMessages,
-        response_format: { type: "json_object" },
-        temperature: 0.7,
-      }),
-    });
+    // Call OpenRouter with 15s timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    let openRouterResponse: Response;
+    try {
+      openRouterResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "Authorization": `Bearer ${openRouterApiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": supabaseUrl, // Optional: for OpenRouter analytics
+          "X-Title": "Docket Voice Assistant",
+        },
+        body: JSON.stringify({
+          model,
+          messages: chatMessages,
+          response_format: { type: "json_object" },
+          temperature: 0.7,
+        }),
+      });
+    } catch (e) {
+      clearTimeout(timeoutId);
+      if (e instanceof Error && e.name === "AbortError") {
+        return new Response(
+          JSON.stringify({ error: "Request timed out. Please try again." }),
+          { status: 504, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      throw e;
+    }
+    clearTimeout(timeoutId);
 
     if (!openRouterResponse.ok) {
       const errorText = await openRouterResponse.text();

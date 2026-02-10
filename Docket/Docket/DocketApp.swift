@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import AppIntents
 
 @main
 struct DocketApp: App {

@@ -47,6 +47,7 @@ struct ProfileView: View {
     @AppStorage("useWhisperTranscription") private var useWhisperTranscription = false
     @AppStorage("useOpenAITTS") private var useOpenAITTS = true
     @AppStorage("openAITTSVoice") private var openAITTSVoice = "nova"
+    @AppStorage("progressTrackingDefault") private var progressTrackingDefault = false
     
     init(authManager: AuthManager) {
         self.authManager = authManager
@@ -123,6 +124,14 @@ struct ProfileView: View {
                         Text("1 day before").tag(1440)
                     }
                 }
+            }
+            
+            // MARK: - Tasks
+            Section("Tasks") {
+                Toggle("Track progress by default", isOn: $progressTrackingDefault)
+                Text("New tasks will have progress tracking enabled automatically")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             
             // MARK: - Voice Settings

@@ -140,6 +140,12 @@ struct EditTaskView: View {
                         }
                     }
                     
+                    // Progress Tracking
+                    Toggle(isOn: $task.isProgressEnabled) {
+                        Label("Track Progress", systemImage: "chart.bar.fill")
+                    }
+                    .tint(.blue)
+                    
                     Divider()
                     
                     if isChecklistCategory || !checklistItems.isEmpty {
