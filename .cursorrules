@@ -15,7 +15,7 @@ Voice-to-task with conversational AI lets users create, categorize, annotate, an
 - **Local persistence:** SwiftData
 - **Cloud sync:** Supabase bi-directional with offline queue
 - **Voice transcription:** Apple SFSpeechRecognizer (on-device, free)
-- **TTS readback:** OpenAI TTS API (primary, natural voices) / AVSpeechSynthesizer (fallback)
+- **TTS readback:** OpenAI gpt-4o-mini-tts (streaming PCM) / AVSpeechSynthesizer (fallback)
 - **AI parsing:** gpt-4.1-mini via OpenRouter → Supabase Edge Function
 - **Audio capture:** AVAudioEngine + AVAudioSession
 - **No orchestrator:** Single-shot/conversational API calls — no LangChain/LangGraph
@@ -164,6 +164,16 @@ struct ParseResponse: Codable {
 - **Privacy first:** no raw audio retention for personalization; no transcript payloads in analytics.
 - **User control required:** include opt-in/opt-out and "reset learned voice data" in Profile.
 - **Prompt discipline:** inject only relevant personalization snippets (top N), never full correction history.
+
+## Supabase Edge Function Deployment
+⚠️ **All Docket Edge Functions are deployed with `--no-verify-jwt`:**
+```bash
+supabase functions deploy <function-name> --no-verify-jwt
+```
+- The Supabase API gateway's built-in JWT check is **disabled** for our functions.
+- Each function handles its own auth internally (checks `Authorization` header, calls `supabase.auth.getUser()`).
+- If you deploy **without** `--no-verify-jwt`, the gateway will reject requests with 401 before your function code runs, even if the client sends a valid token.
+- This applies to: `text-to-speech`, `parse-voice-tasks`, `transcribe-audio`, `push-share-notification`.
 
 ## Development Workflow
 - Build iteratively: Model → ViewModel → View → Preview → Test on device

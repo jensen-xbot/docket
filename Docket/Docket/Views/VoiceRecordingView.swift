@@ -450,7 +450,7 @@ struct VoiceRecordingView: View {
             let followUp = "You're welcome. Will this be all?"
             isProcessingUtterance = false
             isInClosingFlow = true
-            ttsManager.speakWithBoundedSync(text: followUp, boundedWait: 0.75, onTextReveal: { [self] in
+            ttsManager.speakWithBoundedSync(text: followUp, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
                 messages.append(ConversationMessage(role: "assistant", content: followUp))
                 state = .speaking
             }, onFinish: { [self] in
@@ -587,7 +587,7 @@ struct VoiceRecordingView: View {
                         // Show confirmation card
                         pendingShareConfirmation = PendingShareConfirmation(tasks: parsedTasks, contact: contact)
                         let confirmText = "I'll share this with \(contact.contactName ?? contact.contactEmail). How would you like to send it? Docket, email, or text."
-                        ttsManager.speakWithBoundedSync(text: confirmText, boundedWait: 0.75, onTextReveal: { [self] in
+                        ttsManager.speakWithBoundedSync(text: confirmText, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
                             state = .speaking
                             messages.append(ConversationMessage(role: "assistant", content: confirmText))
                         }, onFinish: { [self] in
@@ -601,7 +601,7 @@ struct VoiceRecordingView: View {
                             tasksToSave[i].shareWith = nil
                         }
                         let errorText = "I couldn't find \(firstShareWith) in your contacts. I'll add the task without sharing."
-                        ttsManager.speakWithBoundedSync(text: errorText, boundedWait: 0.75, onTextReveal: { [self] in
+                        ttsManager.speakWithBoundedSync(text: errorText, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
                             messages.append(ConversationMessage(role: "assistant", content: errorText))
                             state = .speaking
                         }, onFinish: { [self] in
@@ -616,7 +616,7 @@ struct VoiceRecordingView: View {
                     VoiceTrace.trace("state -> speaking (complete)")
                     #endif
                     let needsConfirmation = summary.contains("?")
-                    ttsManager.speakWithBoundedSync(text: summary, boundedWait: 0.75, onTextReveal: { [self] in
+                    ttsManager.speakWithBoundedSync(text: summary, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
                         state = .speaking
                         messages.append(ConversationMessage(role: "assistant", content: summary))
                     }, onFinish: { [self] in
@@ -652,7 +652,7 @@ struct VoiceRecordingView: View {
                 }
             } else {
                 let question = response.text ?? ""
-                ttsManager.speakWithBoundedSync(text: question, boundedWait: 0.75, onTextReveal: { [self] in
+                ttsManager.speakWithBoundedSync(text: question, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
                     messages.append(ConversationMessage(role: "assistant", content: question))
                     state = .speaking
                 }, onFinish: { [self] in
@@ -678,7 +678,7 @@ struct VoiceRecordingView: View {
         guard !tasks.isEmpty else {
             isInClosingFlow = true
             let followUp = "Got it. Anything else?"
-            ttsManager.speakWithBoundedSync(text: followUp, boundedWait: 0.75, onTextReveal: { [self] in
+            ttsManager.speakWithBoundedSync(text: followUp, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
                 messages.append(ConversationMessage(role: "assistant", content: followUp))
                 state = .speaking
             }, onFinish: { [self] in
@@ -785,7 +785,7 @@ struct VoiceRecordingView: View {
             isInClosingFlow = true
             let taskCount = tasks.count
             let followUp = taskCount == 1 ? "Done! Anything else?" : "All \(taskCount) added! Anything else?"
-            ttsManager.speakWithBoundedSync(text: followUp, boundedWait: 0.75, onTextReveal: { [self] in
+            ttsManager.speakWithBoundedSync(text: followUp, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
                 messages.append(ConversationMessage(role: "assistant", content: followUp))
                 state = .speaking
             }, onFinish: { [self] in
@@ -865,7 +865,7 @@ struct VoiceRecordingView: View {
             // Confirm and ask for more
             isInClosingFlow = true
             let followUp = "Updated! Anything else?"
-            ttsManager.speakWithBoundedSync(text: followUp, boundedWait: 0.75, onTextReveal: { [self] in
+            ttsManager.speakWithBoundedSync(text: followUp, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
                 messages.append(ConversationMessage(role: "assistant", content: followUp))
                 state = .speaking
             }, onFinish: { [self] in
@@ -1126,7 +1126,7 @@ struct VoiceRecordingView: View {
     private func askAnythingElse() {
         isInClosingFlow = true
         let followUp = "Anything else?"
-        ttsManager.speakWithBoundedSync(text: followUp, boundedWait: 0.75, onTextReveal: { [self] in
+        ttsManager.speakWithBoundedSync(text: followUp, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
             messages.append(ConversationMessage(role: "assistant", content: followUp))
             state = .speaking
         }, onFinish: { [self] in
@@ -1327,7 +1327,7 @@ struct VoiceRecordingView: View {
         
         // TTS readback
         if let summary = response.summary {
-            ttsManager.speakWithBoundedSync(text: summary, boundedWait: 0.75, onTextReveal: { [self] in
+            ttsManager.speakWithBoundedSync(text: summary, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
                 messages.append(ConversationMessage(role: "assistant", content: summary))
                 state = .speaking
             }, onFinish: { [self] in
@@ -1382,7 +1382,7 @@ struct VoiceRecordingView: View {
         
         // TTS readback
         if let summary = response.summary {
-            ttsManager.speakWithBoundedSync(text: summary, boundedWait: 0.75, onTextReveal: { [self] in
+            ttsManager.speakWithBoundedSync(text: summary, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
                 messages.append(ConversationMessage(role: "assistant", content: summary))
                 state = .speaking
             }, onFinish: { [self] in

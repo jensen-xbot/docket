@@ -18,6 +18,8 @@ class VoiceTaskParser {
     
     var isProcessing = false
     var errorMessage: String?
+    /// Cached access token from last successful send(); passed to TTS to avoid redundant auth fetch.
+    var lastAccessToken: String?
     
     func send(messages: [ConversationMessage], existingTasks: [TaskContext]? = nil, groceryStores: [GroceryStoreContext]? = nil) async throws -> ParseResponse {
         isProcessing = true
@@ -53,6 +55,7 @@ class VoiceTaskParser {
                 )
             )
             
+            lastAccessToken = session.accessToken
             return parseResponse
         } catch let error as FunctionsError {
             // Detailed logging for Edge Function errors

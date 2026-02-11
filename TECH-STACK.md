@@ -40,7 +40,9 @@
 - **Audio Capture:** AVAudioEngine with buffer processing
 - **Transport:** HTTPS REST per turn (Supabase `functions.invoke`) — no WebSocket
 - **NLU:** gpt-4.1-mini via OpenRouter → Supabase Edge Function
-- **TTS (Readback):** OpenAI TTS API (primary, natural voices) / Apple AVSpeechSynthesizer (fallback)
+- **TTS (Readback):** OpenAI gpt-4o-mini-tts (streaming PCM, primary) / Apple AVSpeechSynthesizer (fallback)
+- **TTS Playback:** AVAudioEngine + AVAudioPlayerNode for streaming; 24kHz 16-bit mono PCM
+- **TTS Voices:** 13 voices (alloy, ash, ballad, coral, echo, fable, marin, nova, onyx, sage, shimmer, verse, cedar)
 - **Audio Format:** PCM on-device; text-only to backend (no audio streaming)
 
 ## Real-Time

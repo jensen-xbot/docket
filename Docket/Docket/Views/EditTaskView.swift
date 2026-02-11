@@ -433,7 +433,7 @@ struct EditTaskView: View {
             if hasDueDate {
                 DatePicker("", selection: $dueDate, displayedComponents: [.date])
                     .datePickerStyle(.graphical)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(.opacity.combined(with: .move(edge: .leading)))
             }
         }
     }

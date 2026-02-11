@@ -63,12 +63,12 @@ The system transcribes speech on-device (Apple SFSpeechRecognizer), sends conver
 - **Mic auto-restarts:** After TTS finishes speaking, the mic re-activates automatically so the user can respond hands-free.
 - **Visual + audio:** Every AI response appears as text AND is spoken via TTS. User can mute TTS in Settings.
 
-### Synchronized text + audio (v1.1 hotfix)
-Assistant responses use a **bounded-wait** flow so text and playback stay in sync when possible:
-- TTS audio is requested first; the UI shows "Thinking..." then "Preparing voice..." while the request is in flight.
-- If audio is ready within **750 ms**, the assistant bubble is revealed and playback starts together.
-- If not ready in time, the bubble is revealed immediately and "Preparing voice..." remains until playback starts.
-- TTS request has an **8 s** timeout; on failure or timeout the app falls back to Apple TTS.
+### Synchronized text + audio (v1.1)
+Assistant responses use streaming TTS for low latency:
+- Text is revealed immediately; TTS streams PCM audio from OpenAI gpt-4o-mini-tts via Edge Function.
+- Playback starts as soon as the first chunks arrive (AVAudioEngine + AVAudioPlayerNode).
+- "Preparing voice..." shows while the stream is connecting; playback begins within ~0.5–1.5 s.
+- On stream error or timeout, the app falls back to Apple TTS.
 
 ### Interruption policy
 - **`.began`** (e.g. phone call, Siri): recording is stopped; no auto-resume.
@@ -465,7 +465,7 @@ Turn 3:
 |------|---------|
 | `Managers/SpeechRecognitionManager.swift` | Handles mic + Apple Speech |
 | `Managers/VoiceTaskParser.swift` | Calls Supabase Edge Function |
-| `Managers/TTSManager.swift` | AVSpeechSynthesizer wrapper for readback |
+| `Managers/TTSManager.swift` | Streaming TTS (AVAudioEngine) + Apple fallback |
 | `Views/VoiceRecordingView.swift` | Mic button + recording overlay |
 | `Views/TaskConfirmationView.swift` | Parsed task list with edit/confirm |
 | `Models/ParsedTask.swift` | Lightweight struct for AI response |
@@ -478,14 +478,20 @@ Turn 3:
 - Handles permissions (microphone + speech recognition)
 
 ### TTSManager
-- **Primary:** OpenAI TTS API (natural voices — nova, alloy, echo, etc.)
+- **Primary:** OpenAI gpt-4o-mini-tts (streaming PCM, 24kHz 16-bit mono)
 - **Fallback:** Apple AVSpeechSynthesizer (on-device, free)
+- **Playback:** AVAudioEngine + AVAudioPlayerNode (schedule buffers as chunks arrive)
+- **Latency optimizations:** See ADR-011 for details.
+  - Cached auth token: `VoiceTaskParser.lastAccessToken` passed to `speakWithBoundedSync` to avoid redundant `supabase.auth.session` fetch (~50-500ms saved).
+  - Reusable player: Single `TTSStreamingPlayer` instance with `reset()` between uses; engine graph stays attached (~10-30ms saved).
+  - Pre-buffer (jitter buffer): Enqueue 2048-byte chunks into `AVAudioPlayerNode` but defer `playerNode.play()` until 6144 bytes (~128ms) are queued. This builds enough audio runway to absorb network jitter and prevent underruns between chunks. For short responses (< 6144 bytes), playback starts as soon as the stream ends.
+  - Engine pre-start: AVAudioEngine started before HTTP request so it is ready when first bytes arrive (~20-50ms saved).
+  - **Known limitation:** Minor jitter can still be perceptible on some responses due to byte-by-byte async iteration overhead and variable network chunk arrival. Acceptable for now; future improvement could use `URLSessionDataDelegate` for native chunk delivery.
 - `@Observable` for SwiftUI binding
-- Properties: `isSpeaking`
-- Methods: `speak(_ text: String)`, `stop()`
-- Bounded-wait flow: request TTS audio, show bubble if ready within 750ms, fallback after 8s timeout
-- Uses the AI-generated `summary` field for natural readback
-- Voice selectable in Profile settings (6 OpenAI voices)
+- Properties: `isSpeaking`, `isGeneratingTTS`
+- Methods: `speak(_ text: String, accessToken:)`, `speakWithBoundedSync(text:boundedWait:accessToken:onTextReveal:onFinish:)`, `stop()`
+- Streaming flow: text revealed immediately; audio streams via Edge Function proxy; playback starts after ~128ms pre-buffer fills
+- Voice selectable in Profile settings (13 voices: nova, alloy, echo, fable, onyx, shimmer, ash, sage, ballad, verse, marin, cedar, coral)
 - Can be muted via user preference (Settings toggle)
 
 ### VoiceRecordingView
@@ -512,6 +518,7 @@ Turn 3:
 - Sends messages + today's date + timezone + contacts list
 - Receives either a follow-up question or completed tasks
 - Also sends `existingTasks` (TaskContext[]) and `groceryStores` (GroceryStoreContext[]) for task awareness
+- `lastAccessToken`: Cached token from last successful `send()`; passed to `TTSManager.speakWithBoundedSync` to avoid redundant auth fetch (~50-500ms latency reduction)
 - Returns `ParseResponse` (type: "question", "complete", "update", or "delete")
 - Error handling (network, parse failures, rate limits)
 
@@ -687,7 +694,7 @@ Before starting this feature:
 | Component | Usage (per user/month) | Cost |
 |-----------|----------------------|------|
 | Apple Speech | Unlimited | Free |
-| OpenAI TTS (primary) | ~150 responses | ~$0.20-0.30 |
+| OpenAI gpt-4o-mini-tts (primary, streaming) | ~150 responses | ~$0.20-0.30 |
 | AVSpeechSynthesizer (fallback) | Fallback only | Free (on-device) |
 | OpenRouter (gpt-4.1-mini) | ~150 calls (~50 tasks × ~3 turns avg) | ~$0.08 |
 | Supabase Edge Functions | ~150 invocations | Free tier |
@@ -697,7 +704,7 @@ Before starting this feature:
 Conversational adds ~2-3x more API calls vs single-shot (follow-up questions),
 but still very cheap because:
 - Speech is on-device (no Whisper costs)
-- OpenAI TTS provides premium quality; AVSpeechSynthesizer remains free fallback
+- OpenAI gpt-4o-mini-tts provides streaming, low-latency quality; AVSpeechSynthesizer remains free fallback
 - Only sending text to AI (not audio)
 - gpt-4.1-mini is cheap for chat completion
 - Power users who say everything at once use only 1 call (same as single-shot)
@@ -709,7 +716,7 @@ but still very cheap because:
 
 1. **Conversational AI:** Yes — multi-turn dialogue, not single-shot. AI asks follow-up questions when info is missing, skips questions when user provides everything at once. ✅
 2. **Supabase Auth:** Already implemented in v1.0. Edge Function calls will use existing auth tokens. ✅
-3. **TTS readback:** Yes — on every AI response (questions and summaries). Primary: OpenAI TTS API (natural voices); fallback: Apple AVSpeechSynthesizer. User can mute or select voice in Profile.
+3. **TTS readback:** Yes — on every AI response (questions and summaries). Primary: OpenAI gpt-4o-mini-tts (streaming PCM); fallback: Apple AVSpeechSynthesizer. User can mute or select voice in Profile.
 4. **Mic auto-restart:** After TTS finishes speaking, mic re-activates automatically for hands-free conversation loop.
 5. **Notes extraction:** Yes — AI prompt extracts contextual details into `notes` field.
 6. **Voice-initiated sharing:** Yes — AI extracts share targets from speech. Resolved via contacts cache or inline prompt.
@@ -717,7 +724,7 @@ but still very cheap because:
 8. **Model choice:** `openai/gpt-4.1-mini` via OpenRouter. Fast, cheap, excellent structured output. No thinking model needed.
 9. **Orchestrator:** Not needed even for conversational. Conversation state is a messages array on the iOS client. Edge Function is stateless. No LangChain/LangGraph.
 10. **Dependencies:** Zero new installs. Apple Speech, AVFoundation, AVSpeechSynthesizer are all built into iOS. Edge Function uses native Deno `fetch()`.
-11. **Audio session:** Use `.playAndRecord` category with `.defaultToSpeaker` override. Stop AVAudioEngine during TTS playback, restart after TTS completion callback.
+11. **Audio session:** Use `.playAndRecord` category with `.defaultToSpeaker` override. TTS uses AVAudioEngine for streaming playback; stop recording during TTS, restart after completion callback.
 
 ## Open Decisions
 

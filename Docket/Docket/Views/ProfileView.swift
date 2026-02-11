@@ -154,6 +154,13 @@ struct ProfileView: View {
                         Text("Fable").tag("fable")
                         Text("Onyx").tag("onyx")
                         Text("Shimmer").tag("shimmer")
+                        Text("Ash").tag("ash")
+                        Text("Sage").tag("sage")
+                        Text("Ballad").tag("ballad")
+                        Text("Verse").tag("verse")
+                        Text("Marin").tag("marin")
+                        Text("Cedar").tag("cedar")
+                        Text("Coral").tag("coral")
                     }
                 }
                 

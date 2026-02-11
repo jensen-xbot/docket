@@ -3,8 +3,14 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 interface TTSRequest {
   text: string;
-  voice?: string; // "alloy", "echo", "fable", "onyx", "nova", "shimmer" (default: "nova")
+  voice?: string; // gpt-4o-mini-tts: alloy, ash, ballad, coral, echo, fable, onyx, nova, sage, shimmer, verse, marin, cedar
+  stream?: boolean; // default true — streaming PCM for low latency
 }
+
+const VALID_VOICES = [
+  "alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova",
+  "sage", "shimmer", "verse", "marin", "cedar",
+];
 
 Deno.serve(async (req: Request) => {
   // CORS headers
@@ -49,7 +55,7 @@ Deno.serve(async (req: Request) => {
 
     // Parse request body
     const body: TTSRequest = await req.json();
-    const { text, voice = "nova" } = body;
+    const { text, voice = "nova", stream = true } = body;
 
     if (!text || typeof text !== "string" || text.trim().length === 0) {
       return new Response(
@@ -58,9 +64,17 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // OpenAI API limit: 4096 chars
+    const inputText = text.slice(0, 4096).trim();
+    if (inputText.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "Invalid request: text required" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
     // Validate voice
-    const validVoices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"];
-    const selectedVoice = validVoices.includes(voice) ? voice : "nova";
+    const selectedVoice = VALID_VOICES.includes(voice) ? voice : "nova";
 
     // Get OpenAI API key (same key used for Whisper)
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
@@ -71,19 +85,27 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Call OpenAI TTS API
+    // Call OpenAI TTS API (gpt-4o-mini-tts supports streaming)
+    const openaiBody: Record<string, unknown> = {
+      model: "gpt-4o-mini-tts",
+      voice: selectedVoice,
+      input: inputText,
+    };
+
+    if (stream) {
+      openaiBody.response_format = "pcm"; // 24kHz 16-bit mono, no header
+      openaiBody.stream_format = "audio";
+    } else {
+      openaiBody.response_format = "mp3";
+    }
+
     const ttsResponse = await fetch("https://api.openai.com/v1/audio/speech", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${openaiApiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: "tts-1",
-        voice: selectedVoice,
-        input: text,
-        response_format: "mp3",
-      }),
+      body: JSON.stringify(openaiBody),
     });
 
     if (!ttsResponse.ok) {
@@ -95,7 +117,17 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Return MP3 audio as binary
+    if (stream && ttsResponse.body) {
+      // Proxy the stream directly to the client
+      return new Response(ttsResponse.body, {
+        headers: {
+          "Content-Type": "audio/raw",
+          "Access-Control-Allow-Origin": "*",
+        },
+      });
+    }
+
+    // Non-streaming: return full MP3
     const audioData = await ttsResponse.arrayBuffer();
     return new Response(audioData, {
       headers: {

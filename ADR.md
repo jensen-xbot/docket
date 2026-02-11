@@ -118,6 +118,46 @@
   - Realtime sync reduces pull-based latency
 - **Date:** 2026-02-08 (updated 2026-02-10 with Sharing System V2)
 
+## ADR-010: TTS Model Migration to gpt-4o-mini-tts with Streaming (v1.1)
+- **Decision:** Migrate from tts-1 to gpt-4o-mini-tts with streaming PCM playback
+- **Context:** tts-1 does not support streaming; long responses caused timeout and Apple fallback. gpt-4o-mini-tts supports streaming with similar cost (~$0.015/min).
+- **Options Considered:**
+  - Chunk-and-queue with tts-1 (multiple requests, gaps between chunks)
+  - gpt-4o-mini-tts with streaming (single request, low latency)
+- **Decision:** gpt-4o-mini-tts + streaming PCM via Edge Function proxy
+- **Implementation:**
+  - Edge Function: model `gpt-4o-mini-tts`, `response_format: "pcm"`, `stream_format: "audio"`; proxy stream to client
+  - iOS: URLSession.bytes for streaming; AVAudioEngine + AVAudioPlayerNode; convert PCM chunks to AVAudioPCMBuffer
+  - Fallback: Apple AVSpeechSynthesizer on stream error or timeout
+- **Consequences:**
+  - Lower perceived latency (audio starts before full generation)
+  - Better quality and 13 voices (incl. marin, cedar)
+  - Requires AVAudioEngine instead of AVAudioPlayer
+- **Date:** 2026-02-11
+
+## ADR-011: TTS Streaming Latency Optimizations (v1.1)
+- **Decision:** Reduce time-to-first-audio with cached token, reusable player, smaller first chunk, and engine pre-start
+- **Context:** After AI text appears, there was a noticeable delay before TTS audio started. Several sequential bottlenecks added ~130-730ms.
+- **Options Considered:**
+  - Status quo (acceptable but perceptible lag)
+  - Full pipeline rewrite (URLSessionDataDelegate, connection pooling)
+  - Targeted optimizations (chosen)
+- **Decision:** Four targeted optimizations:
+  1. **Cached access token:** `VoiceTaskParser` sets `lastAccessToken` after `send()`; all `speakWithBoundedSync` call sites pass it. TTSManager skips `supabase.auth.session` when token provided. Saves ~50-500ms.
+  2. **Reusable TTSStreamingPlayer:** Lazy singleton with `reset()` between uses. Engine graph stays attached; no per-request setup. Saves ~10-30ms.
+  3. **Pre-buffer (jitter buffer):** Enqueue 2048-byte chunks but defer `playerNode.play()` until 6144 bytes (~128ms) are queued. This prevents buffer underruns between chunks. Short responses (< 6144 bytes) start playback as soon as the stream ends.
+  4. **Engine pre-start:** Start AVAudioEngine before `URLSession.shared.bytes(for:)`. Engine ready when first bytes arrive. Saves ~20-50ms.
+- **Implementation:**
+  - [TTSManager.swift](Docket/Docket/Managers/TTSManager.swift): `reusableStreamingPlayer`, `reset()`, `prepare()`/`beginPlayback()` split, `accessToken` param, `kTTSStreamChunkSize` (2048), `kTTSStreamPreBufferSize` (6144), engine start before HTTP
+  - [VoiceTaskParser.swift](Docket/Docket/Managers/VoiceTaskParser.swift): `lastAccessToken` property
+  - [VoiceRecordingView.swift](Docket/Docket/Views/VoiceRecordingView.swift): Pass `parser.lastAccessToken` to all `speakWithBoundedSync` and `speak` calls
+- **Consequences:**
+  - Total estimated savings: ~130-730ms reduction in time-to-first-audio
+  - No API or backend changes
+  - Token reuse is safe; same session used for parse and TTS within same turn
+  - Minor jitter may still be perceptible due to byte-by-byte async iteration; future improvement could use `URLSessionDataDelegate` for native chunk delivery
+- **Date:** 2026-02-11
+
 ## ADR-009: Voice Intent Classification Extraction (v1.1)
 - **Decision:** Extract deterministic voice intent logic into a dedicated `IntentClassifier` struct in `Managers/`, separate from `VoiceRecordingView`
 - **Context:** Intent detection (confirm, reject, dismiss, gratitude) and phrase lists were embedded directly in VoiceRecordingView (~1500 lines). The view mixed UI, orchestration, and classification logic.

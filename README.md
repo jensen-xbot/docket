@@ -20,7 +20,7 @@ This is a learning project — a training ground for building full-stack iOS app
 - **Database:** SwiftData + Supabase (sync)
 - **Auth:** Supabase Auth (Apple, email magic link)
 - **Voice transcription:** Apple SFSpeechRecognizer (on-device) + optional Whisper API fallback
-- **TTS readback:** OpenAI TTS API (natural voices) with Apple AVSpeechSynthesizer fallback
+- **TTS readback:** OpenAI gpt-4o-mini-tts (streaming) with Apple AVSpeechSynthesizer fallback
 - **AI parsing:** gpt-4.1-mini via OpenRouter → Supabase Edge Function
 - **Notifications:** UserNotifications (local) + APNs (push for shared tasks)
 - **Sharing:** MessageUI (email + SMS), Contacts framework (contact picker), Supabase Edge Functions (share push)
