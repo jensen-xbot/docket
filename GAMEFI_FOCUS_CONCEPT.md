@@ -1,251 +1,435 @@
-# GameFi Focus Mode: Town Builder Concept
+# GameFi Focus Mode: Town Builder Concept V2
 
-*Exploratory document for gamified focus system*  
-*Created: 2026-02-11*
-
----
-
-## Your Vision (Captured)
-
-**Core Loop:**
-```
-Focus Session (25 min) → Gather Resources → Build Town → Battle Other Towns
-```
-
-**Resources:**
-- Wood, Stone, Gold (different focus types?)
-- Food (daily streaks?)
-- Special resources (rare focus achievements)
-
-**Buildings:**
-- Houses (population)
-- Barracks (armies)
-- Walls (defense)
-- Markets (trading)
-
-**Combat:**
-- PvP battles between towns
-- Resource raiding
-- Territory expansion
-
-**Concern:** "Too complicated, requires game design skills"
+*Updated specification based on user feedback*  
+*Created: 2026-02-11*  
+*Status: MVP Design Complete*
 
 ---
 
-## Reality Check: AI CAN Build This
+## Core Vision (Updated)
 
-**Yes, AI can help design games.** Here's how:
+**Focus Session Flow:**
+```
+Select Timer (15/30/45 min) → Pick Resource → Focus Timer → Gather Resources
+```
 
-### What AI Can Do
-✅ Generate game mechanics and balancing  
-✅ Create resource economies (gathering rates, costs)  
-✅ Design progression curves (when to unlock what)  
-✅ Write building/army stat sheets  
-✅ Create battle algorithms (simple math)  
-✅ Balance PvP (prevent pay-to-win)  
+**Monetization:**
+- Free: Standard gathering rates
+- Pro ($8.99/month): Accelerated gathering (2x rate + bonus resources)
 
-### What You Need to Provide
-🎯 **Theme** (Medieval? Space? Cyberpunk?)  
-🎯 **Tone** (Serious? Playful? Minimalist?)  
-🎯 **Session length** (15 min? 25 min? Variable?)  
-🎯 **Social aspect** (Friends only? Global leaderboard?)  
+**Visual Style:**
+- Emojis + SF Symbols (no custom art needed)
+- Simple grid map (future: pixel art)
+- Infinity/moving background during focus
+- Breathing pulse on progress ring
 
 ---
 
-## Complexity Breakdown
+## Focus Session UI
 
-### Simplified Version (MVP - 2-3 weeks)
+### Main Focus View
 
-**Scope:** Single-player town, no PvP combat yet
-
-**Core Loop:**
 ```
-Focus 25 min → Get 10 Wood → Build House → Population +1
+┌─────────────────────────────────────────┐
+│                                         │
+│  🪵 142  ⚒️ 58  💰 23  🌾 89  🪨 12    │  ← Total resources (top)
+│                                         │
+│                                         │
+│        ╭─────────────────╮              │
+│       ╱                   ╲             │
+│      │         ◐           │            │  ← Giant progress ring
+│      │       Pulsing       │            │     (breathing animation)
+│      │       0%            │            │
+│       ╲                   ╱             │
+│        ╰─────────────────╯              │
+│                                         │
+│         ┌─────────┐                     │
+│         │  ⏱️ 30  │                     │  ← Timer selector
+│         │  min    │                     │
+│         └─────────┘                     │
+│                                         │
+│    [15]    [30]★    [45]                │  ← 15 / 30 / 45 min options
+│                                         │
+│         Pick your resource:             │
+│                                         │
+│  ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐   │
+│  │ 🪵  │  │ ⚒️  │  │ 💰  │  │ 🌾  │   │  ← Resource selection
+│  │Wood │  │Iron │  │Gold │  │Food │   │
+│  │ 30  │  │ 15  │  │ 6   │  │ 60  │   │  ← Amount (30 min × rate)
+│  └─────┘  └─────┘  └─────┘  └─────┘   │
+│                                         │
+│         [Start Focus Session]           │
+│                                         │
+└─────────────────────────────────────────┘
+        ↓ (Background: Infinity/warp)
 ```
+
+### Active Focus View (Timer Running)
+
+```
+┌─────────────────────────────────────────┐
+│  🪵 142  ⚒️ 58  💰 23  🌾 89  🪨 12    │
+│                                         │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+│  ◄═════◄═════◄ Infinity Warp ►═════►  │  ← Moving background
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+│                                         │
+│        ╭─────────────────╮              │
+│       ╱    ◐──╮         ╲             │  ← Ring fills over time
+│      │    /    \         │            │
+│      │   │ 28:45 │        │            │  ← Countdown timer
+│      │    \    /         │            │
+│       ╲    ╰──╯         ╱             │
+│        ╰─────────────────╯              │
+│                                         │
+│      Gathering: 🪵 Wood                 │
+│      Rate: 1 per minute                 │
+│      Est. gain: 30 wood                 │
+│                                         │
+│         [Cancel]   [Pause]              │
+│                                         │
+└─────────────────────────────────────────┘
+```
+
+### Background Animation
+
+**Infinity/Warp Effect:**
+```swift
+// SwiftUI implementation concept
+struct InfinityBackground: View {
+    @State private var phase: Double = 0
+    
+    var body: some View {
+        TimelineView(.animation) { timeline in
+            Canvas { context, size in
+                // Draw flowing lines converging to center
+                // Phase shifts over time for movement
+                let t = timeline.date.timeIntervalSinceReferenceDate
+                
+                for i in 0..<20 {
+                    let angle = Double(i) * .pi / 10 + sin(t + Double(i)) * 0.1
+                    let path = createWarpLine(angle: angle, phase: t)
+                    context.stroke(path, with: .color(.blue.opacity(0.3)), lineWidth: 2)
+                }
+            }
+        }
+    }
+}
+```
+
+**Alternative:** Starfield particles moving toward center (simpler)
+
+---
+
+## Timer System
+
+### Timer Options
+
+| Duration | Base Gathering | Use Case |
+|----------|---------------|----------|
+| **15 min** | 15 resources | Quick focus, small tasks |
+| **30 min** ⭐ | 30 resources | Standard pomodoro |
+| **45 min** | 45 resources | Deep work sessions |
+
+**Formula:** `Resources = Minutes × Base Rate`
+
+### Resource Rates (Per Minute)
+
+| Resource | Base Rate | Pro Rate (2x) | Pro + 1hr Bonus |
+|----------|-----------|---------------|-----------------|
+| 🪵 Wood | 1/min | 2/min | 2.5/min |
+| ⚒️ Iron | 0.5/min | 1/min | 1.25/min |
+| 💰 Gold | 0.2/min | 0.4/min | 0.5/min |
+| 🌾 Food | 2/min | 4/min | 5/min |
+| 🪨 Stone | 0.3/min | 0.6/min | 0.75/min |
+
+### 1+ Hour Daily Bonus (Accelerated Gathering)
+
+**Trigger:** Cumulative focus time > 60 minutes in one day
+
+**Effect:** +25% gathering rate for rest of day
+
+**Example Day (Free User):**
+- 9:00 AM: 30 min Wood → 30 🪵
+- 11:00 AM: 30 min Iron → 15 ⚒️
+- **Total: 60 min** → Bonus activated! 🎉
+- 2:00 PM: 30 min Wood (bonus) → 37 🪵 (30 × 1.25)
+- 4:00 PM: 15 min Gold (bonus) → 3.75 💰 (15 × 0.2 × 1.25)
+
+**Example Day (Pro User):**
+- 9:00 AM: 30 min Wood (2x) → 60 🪵
+- 11:00 AM: 30 min Iron (2x) → 30 ⚒️
+- **Total: 60 min** → Bonus activated! 🎉
+- 2:00 PM: 30 min Wood (2x + 25%) → 75 🪵 (30 × 2 × 1.25)
+- **Daily Total:** 165 🪵 + 30 ⚒️ (vs 60 🪵 + 15 ⚒️ free user)
+
+---
+
+## Pro Membership ($8.99/month)
+
+### Pro Benefits
+
+| Feature | Free | Pro |
+|---------|------|-----|
+| Gathering rate | 1x | 2x |
+| Resource choices per session | 1 | 2 (pick 2 resources!) |
+| Max daily sessions | 10 | Unlimited |
+| 1+ hour bonus | +25% | +25% (stacks: 2x × 1.25 = 2.5x) |
+| Exclusive buildings | ❌ | ✅ |
+| Cloud backup | ❌ | ✅ |
+| Ad-free | N/A | ✅ |
+
+### Pro Gathering Example
+
+**30-min session, Pro user, after 1hr bonus:**
+```
+Pick 2 resources: 🪵 Wood + ⚒️ Iron
+
+Wood: 30 min × 2 (Pro) × 1.25 (Bonus) = 75 🪵
+Iron: 30 min × 1 (Pro) × 1.25 (Bonus) = 37 ⚒️
+─────────────────────────────────────────────
+Total: 75 🪵 + 37 ⚒️ (112 resources!)
+```
+
+**Same session, Free user:**
+```
+Pick 1 resource: 🪵 Wood
+
+Wood: 30 min × 1 (Free) = 30 🪵
+─────────────────────────────────
+Total: 30 🪵
+```
+
+**Pro advantage:** 3.7x more resources per session
+
+---
+
+## Resource System
+
+### Core Resources (5 Types)
+
+| Resource | Emoji | Use | Storage Cap |
+|----------|-------|-----|-------------|
+| **Wood** | 🪵 | Buildings, crafting | 500 |
+| **Iron** | ⚒️ | Tools, weapons | 250 |
+| **Gold** | 💰 | Premium items, speed-ups | 100 |
+| **Food** | 🌾 | Population upkeep | 1000 (consumes daily) |
+| **Stone** | 🪨 | Walls, fortifications | 300 |
+
+### Visual Display
+
+```
+Top Bar (always visible):
+┌─────────────────────────────────────────┐
+│ 🪵 142  ⚒️ 58  💰 23  🌾 89  🪨 12    │
+│                                         │
+│ [Tap resource for details]              │
+└─────────────────────────────────────────┘
+
+Tap Wood 🪵 → Shows:
+- Gathering rate: 1/min (2/min Pro)
+- Storage: 142/500
+- Daily production: ~60 (if consistent)
+- Time to cap: 6 hours
+```
+
+---
+
+## Town View (Future Feature)
+
+### Simple Grid Layout (No 3D)
+
+```
+Town Level 3 (Population: 24)
+
+    A    B    C    D    E
+   ━━━━━━━━━━━━━━━━━━━━━━━━
+1 │ 🏚️ │ 🏚️ │ 🌲 │ ⛏️ │ 🌾 │
+2 │ 🏭 │ 🏰 │ ⬜️ │ ⬜️ │ ⬜️ │
+3 │ 🌲 │ ⬜️ │ ⬜️ │ ⬜️ │ 🐄 │
+4 │ ⬜️ │ ⬜️ │ ⬜️ │ ⚔️ │ ⬜️ │
+   ━━━━━━━━━━━━━━━━━━━━━━━━
+
+Legend:
+🏚️ Hut      🏭 Workshop  🏰 Town Hall
+🌲 Lumber   ⛏️ Mine      🌾 Farm
+⚔️ Barracks 🐄 Pasture   ⬜️ Empty
+```
+
+**Visual Style:**
+- 2D grid (like classic SimCity)
+- Emojis on colored squares (SF Symbols for buildings)
+- Tap empty square → Build menu
+- Tap building → Upgrade/Info
+
+**No pixel art needed** — clean emoji + color squares work great!
+
+---
+
+## Map View (Future Feature)
+
+### Simple Grid (5×5)
+
+```
+World Map
+
+   1     2     3     4     5
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+A │ 🌲 │ 🌲 │ ⛰️ │ ⛰️ │ 💎 │
+B │ 🌲 │ 🏠 │ ➡️ │ ⛰️ │ 💎 │  ← You are at B2
+C │ 🌾 │ 🌾 │ 🌊 │ 🌊 │ 🏴‍☠️ │
+D │ ⬜️ │ ⬜️ │ 🌊 │ 🏴‍☠️ │ 🏴‍☠️ │
+E │ ⬜️ │ ⬜️ │ ⬜️ │ 🏴‍☠️ │ 👹 │
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Legend:
+🏠 Your Town    🌲 Forest (+Wood)  ⛰️ Mountain (+Iron/Stone)
+🌾 Plains (+Food)  🌊 Water (need boats)  💎 Hills (+Gold)
+🏴‍☠️ Unexplored  👹 Enemy Stronghold
+```
+
+**Movement:** Tap adjacent square to explore (costs resources)
+**Combat:** Tap enemy to attack (async, not real-time)
+
+---
+
+## Implementation Priority
+
+### MVP (Week 1-2): Focus Mode Only
+
+**Files to create:**
+- `FocusView.swift` - Main focus UI
+- `FocusTimerManager.swift` - Timer logic
+- `ResourceManager.swift` - Track resources
+- `InfinityBackground.swift` - Moving background
+- `ProgressRing.swift` - Giant pulsing ring
 
 **Features:**
-- 3 resources (Wood, Stone, Gold)
-- 5 building types
-- Population growth
-- Simple visuals (icons, not 3D)
-- Local only (no server)
+- ✅ Timer selection (15/30/45)
+- ✅ Resource selection (5 types)
+- ✅ Countdown timer
+- ✅ Resource calculation
+- ✅ Infinity background
+- ✅ Breathing progress ring
+- ✅ Resource totals display
+- ✅ 1+ hour bonus logic
 
-**UI:**
-```
-┌─────────────────────────────────┐
-│  🏰 My Town          Days: 12   │
-│  Pop: 24            Level: 3    │
-├─────────────────────────────────┤
-│                                 │
-│      [🏠][🏠][🏠]               │
-│      [🏠][🏭][⚔️]               │
-│      [🌲][🗿][💰]               │
-│                                 │
-│  Wood: 45  Stone: 12  Gold: 8   │
-│                                 │
-│  [Start Focus Session]          │
-│  → Gather resources for 25 min  │
-└─────────────────────────────────┘
-```
+### Phase 2 (Week 3-4): Town Grid
 
-**Pros:**
-- Actually achievable
-- No multiplayer server needed
-- Still gamifies focus
-- Can add PvP later
+- Simple 5×5 grid
+- 5 building types (emoji-based)
+- Tap to build/upgrade
+- No combat yet
+
+### Phase 3 (Month 2): Map + Combat
+
+- 5×5 world map
+- Exploration costs
+- Async PvP battles
+- Pro membership unlocks
 
 ---
 
-### Full Version (v2.0 - 2-3 months)
+## Monetization Integration
 
-**Adds:**
-- PvP battles (async, not real-time)
-- Alliances with friends
-- Seasonal events
-- Leaderboards
-- Cosmetic customization
+### StoreKit Purchase
 
-**Tech needed:**
-- Supabase for user towns
-- Battle resolution logic
-- Anti-cheat (validate focus sessions)
-
----
-
-## The Honest Assessment
-
-### Why It MIGHT Be Too Much
-
-1. **Scope creep risk** — Games are endless rabbit holes
-2. **Balancing takes forever** — Fun vs fair vs rewarding
-3. **Art assets** — Even simple icons need design
-4. **Server costs** — Multiplayer = ongoing expenses
-5. **Maintenance** — Games need constant updates
-
-### Why It Might Work
-
-1. **AI generation** — I can design the entire economy
-2. **SwiftUI + SpriteKit** — Native iOS, no Unity complexity
-3. **Existing infrastructure** — Use Supabase, same as Docket
-4. **Phased approach** — Start simple, add complexity if popular
-
----
-
-## Alternative: Focus "Companions" (Simpler)
-
-Instead of full town builder, what about:
-
-```
-Focus Session → Companion grows/evolves
+```swift
+class SubscriptionManager: ObservableObject {
+    @Published var isPro: Bool = false
+    
+    let proProductId = "com.docket.pro.monthly"
+    
+    func purchasePro() async throws {
+        // StoreKit 2 implementation
+    }
+    
+    func checkProStatus() {
+        // Verify receipt, update isPro
+    }
+}
 ```
 
-**Examples:**
-- 🌱 Plant that grows with each focus session
-- 🐱 Virtual pet that levels up
-- 🏠 Room that gets decorated
-- 🎨 Art piece that completes pixel by pixel
+### Pro Check in Resource Calculation
 
-**Pros:**
-- Personal (not competitive)
-- Simpler to balance
-- Still motivating
-- No PvP complexity
-
----
-
-## Recommended Path (If You Want GameFi)
-
-### Phase 1: Personal Rewards (v1.x)
-- Focus streaks → Unlock themes/colors
-- Focus stats → Achievement badges
-- Simple: "7 day streak = Gold theme"
-
-### Phase 2: Companion Mode (v2.0)
-- Choose companion (plant/pet/art)
-- Grows with focus time
-- No multiplayer needed
-
-### Phase 3: Town Builder (v3.0 - if demand)
-- Only if Phases 1-2 are popular
-- Start with single-player
-- Add PvP if users beg for it
-
----
-
-## My Honest Recommendation
-
-**Don't build the town builder yet.**
-
-**Reasoning:**
-1. Docket v1.1 (voice) is already ambitious
-2. Town builder = 2-3 months minimum
-3. Focus features work WITHOUT games
-4. Game complexity might delay launch 6+ months
-
-**Better approach:**
-1. Ship v1.1 with solid focus mode (timer + stats)
-2. See if users actually use focus features
-3. If yes → Add simple companion (Phase 2)
-4. If companions popular → Consider town builder
-
-**Compromise option:**
-- Build simple "focus garden" in v2.0
-- Plant grows with focus time
-- Takes 2 weeks, not 2 months
-- Tests if users want gamification
-
----
-
-## Decision Matrix
-
-| Option | Effort | Fun Factor | Risk | Launch Impact |
-|--------|--------|-----------|------|---------------|
-| No game | 0 days | Low | None | Fast launch |
-| Focus timer only | 3 days | Medium | Low | Fast launch |
-| Focus companion | 2 weeks | High | Low | Medium delay |
-| Town builder (MVP) | 2 months | Very high | Medium | Big delay |
-| Town builder (full) | 4 months | Very high | High | Missed market |
-
----
-
-## My Suggestion
-
-**Start with:** Focus timer + simple stats (3 days work)
-
-```
-Focus Session Complete!
-━━━━━━━━━━━━━━━━━━━━━━
-⏱️  25 minutes focused
-📊  12th session this week
-🔥  5 day streak!
+```swift
+func calculateGathering(
+    duration: Int,        // minutes
+    resource: Resource,
+    isPro: Bool,
+    dailyFocusMinutes: Int
+) -> Int {
+    let baseRate = resource.baseRate
+    let proMultiplier = isPro ? 2.0 : 1.0
+    let bonusMultiplier = dailyFocusMinutes >= 60 ? 1.25 : 1.0
+    
+    return Int(Double(duration) * baseRate * proMultiplier * bonusMultiplier)
+}
 ```
 
-**Then evaluate:** Are users actually using focus mode?
+---
 
-**If yes →** Add companion mode in v2.0
-**If no →** Focus on other features (voice, sync, etc.)
+## Breathing Animation Spec
 
-**Town builder = v3.0 dream**, not v1.1 reality.
+### Progress Ring Pulse
+
+```swift
+struct BreathingProgressRing: View {
+    let progress: Double  // 0.0 - 1.0
+    let isActive: Bool    // true when timer running
+    
+    @State private var breathPhase: Double = 0
+    
+    var body: some View {
+        ZStack {
+            // Base ring
+            Circle()
+                .stroke(Color.gray.opacity(0.3), lineWidth: 20)
+            
+            // Progress arc
+            Circle()
+                .trim(from: 0, to: progress)
+                .stroke(
+                    Color.blue.gradient,
+                    style: StrokeStyle(lineWidth: 20, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
+            
+            // Breathing glow (when active)
+            if isActive {
+                Circle()
+                    .stroke(Color.blue.opacity(0.3), lineWidth: 20 + sin(breathPhase) * 5)
+                    .blur(radius: 10)
+            }
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 4).repeatForever(autoreverses: true)) {
+                breathPhase = .pi * 2
+            }
+        }
+    }
+}
+```
+
+**Effect:** Ring subtly expands/contracts (4 second cycle) when timer active — calming, meditative
 
 ---
 
-## However...
+## Summary of Changes
 
-**If you're passionate about the town builder:**
-
-I CAN help design it. AI can:
-- Create balanced economy spreadsheets
-- Generate building stats and costs
-- Design battle algorithms
-- Write all the copy
-
-**But:** It will delay Docket's launch by 2-3 months minimum.
-
-**Question:** Is the town builder THE reason you're building Docket? Or is it a nice-to-have?
-
-If it's THE reason — let's design it properly.
-If it's nice-to-have — ship focus timer first, town later.
+| Feature | Original | Updated |
+|---------|----------|---------|
+| Timer | Fixed 25 min | 15/30/45 min choice |
+| Resources | Session-based | Minute-based calculation |
+| Pro price | Not specified | $8.99/month |
+| Pro benefit | Not specified | 2x rate + 2 resources + bonus |
+| Bonus | Per session | 1+ hour daily = +25% |
+| Background | None | Infinity/warp animation |
+| Ring | Static | Breathing pulse when active |
+| Resources top bar | Not specified | Always visible |
+| Map | Hex grid | Simple square grid |
+| Art style | Unclear | Emojis + SF Symbols |
 
 ---
 
-What's your gut feeling? Is gamification core to Docket's identity, or should we nail the basics first?
+**Ready to implement?** Start with FocusView.swift (timer + resource selection), then add the infinity background and breathing ring.
