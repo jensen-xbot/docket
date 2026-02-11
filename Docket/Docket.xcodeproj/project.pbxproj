@@ -59,6 +59,8 @@
 		8E9C0F1B2A3B4C5D6E7F0141 /* ComposeViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0241 /* ComposeViews.swift */; };
 		8E9C0F1B2A3B4C5D6E7F0142 /* FuzzyContactMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0242 /* FuzzyContactMatcher.swift */; };
 		8E9C0F1B2A3B4C5D6E7F0143 /* ShareConfirmationCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0243 /* ShareConfirmationCard.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0144 /* ProgressBarIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0244 /* ProgressBarIcon.swift */; };
+		8E9C0F1B2A3B4C5D6E7F0145 /* IntentClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9C0F1B2A3B4C5D6E7F0245 /* IntentClassifier.swift */; };
 		AD6606E62F36F09B004CEBFE /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = AD6606E52F36F09B004CEBFE /* Supabase */; };
 		AD6606E92F37934E004CEBFE /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = AD6606E82F37934E004CEBFE /* AppIcon.icon */; };
 /* End PBXBuildFile section */
@@ -118,6 +120,8 @@
 		8E9C0F1B2A3B4C5D6E7F0241 /* ComposeViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeViews.swift; sourceTree = "<group>"; };
 		8E9C0F1B2A3B4C5D6E7F0242 /* FuzzyContactMatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzyContactMatcher.swift; sourceTree = "<group>"; };
 		8E9C0F1B2A3B4C5D6E7F0243 /* ShareConfirmationCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareConfirmationCard.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F0244 /* ProgressBarIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressBarIcon.swift; sourceTree = "<group>"; };
+		8E9C0F1B2A3B4C5D6E7F0245 /* IntentClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntentClassifier.swift; sourceTree = "<group>"; };
 		AD6606E72F36F4F0004CEBFE /* Docket.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Docket.entitlements; sourceTree = "<group>"; };
 		AD6606E82F37934E004CEBFE /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -211,6 +215,7 @@
 				8E9C0F1B2A3B4C5D6E7F023E /* ProgressRing.swift */,
 				8E9C0F1B2A3B4C5D6E7F023F /* ProgressBar.swift */,
 				8E9C0F1B2A3B4C5D6E7F0240 /* ProgressSlider.swift */,
+				8E9C0F1B2A3B4C5D6E7F0244 /* ProgressBarIcon.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -257,6 +262,7 @@
 				8E9C0F1B2A3B4C5D6E7F0236 /* SpeechRecognitionManager.swift */,
 				8E9C0F1B2A3B4C5D6E7F0237 /* TTSManager.swift */,
 				8E9C0F1B2A3B4C5D6E7F023A /* VoiceTaskParser.swift */,
+				8E9C0F1B2A3B4C5D6E7F0245 /* IntentClassifier.swift */,
 			);
 			path = Managers;
 			sourceTree = "<group>";
@@ -389,6 +395,8 @@
 				8E9C0F1B2A3B4C5D6E7F013E /* ProgressRing.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F013F /* ProgressBar.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0140 /* ProgressSlider.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0144 /* ProgressBarIcon.swift in Sources */,
+				8E9C0F1B2A3B4C5D6E7F0145 /* IntentClassifier.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0141 /* ComposeViews.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0142 /* FuzzyContactMatcher.swift in Sources */,
 				8E9C0F1B2A3B4C5D6E7F0143 /* ShareConfirmationCard.swift in Sources */,

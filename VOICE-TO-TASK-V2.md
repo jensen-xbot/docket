@@ -81,6 +81,8 @@ To keep voice turns fast, Docket uses a hybrid split:
 - **Rule of thumb:** if an intent can be resolved deterministically without AI, handle it locally and skip the parser round-trip.
 - **When to move server-side:** only for cross-platform policy consistency, analytics/A-B testing, or behavior changes that must ship without an app release.
 
+**Implementation:** The client-side intent gate is `IntentClassifier` (`Managers/IntentClassifier.swift`). It returns `VoiceIntent` (confirm, reject, dismiss, gratitude, taskRequest). `VoiceRecordingView` dispatches on this result; only `.taskRequest` goes to the Edge Function. See VOICE-INTENT-RULES.md and ADR-009.
+
 ```mermaid
 flowchart LR
     userSpeech["UserSpeech"] --> intentGate["IntentGate(client)"]

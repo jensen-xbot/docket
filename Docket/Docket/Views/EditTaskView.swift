@@ -32,6 +32,7 @@ struct EditTaskView: View {
     @FocusState private var notesFocused: Bool
     
     @State private var storeStore = StoreStore()
+    @State private var modeSwitchRotation: Double = 0
     
     private var isValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -45,109 +46,28 @@ struct EditTaskView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    // Category & Store
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            isEditingCategory.toggle()
-                        }
-                    } label: {
-                        HStack {
-                            if !category.isEmpty {
-                                Label {
-                                    HStack(spacing: 4) {
-                                        Text(category)
-                                        if !selectedStore.isEmpty {
-                                            Text("·")
-                                                .foregroundStyle(.secondary)
-                                            Text(selectedStore)
-                                        }
-                                    }
-                                } icon: {
-                                    Image(systemName: "tag.fill")
-                                        .foregroundStyle(.green)
-                                }
-                                .font(.subheadline)
-                            } else {
-                                Text("No category")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-                            
-                            Spacer()
-                            
-                            Image(systemName: isEditingCategory ? "chevron.up" : "chevron.down")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .contentShape(Rectangle())
+                    // MARK: 1. Category & Store
+                    categorySection
                     
-                    if isEditingCategory {
-                        CategoryPickerView(selectedCategory: $category)
-                            .onChange(of: category) {
-                                updateTitleForCategory()
-                            }
-                        
-                        if isChecklistCategory {
-                            StorePickerView(
-                                selectedStore: $selectedStore,
-                                onStoreChanged: { updateGroceryTitle() }
-                            )
-                            
-                            // Saved templates
-                            if !availableTemplates.isEmpty {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Load a Template")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                    FlowLayout(spacing: 8) {
-                                        ForEach(availableTemplates) { template in
-                                            Button {
-                                                loadTemplate(template)
-                                            } label: {
-                                                HStack(spacing: 4) {
-                                                    Image(systemName: "doc.on.doc")
-                                                        .font(.caption2)
-                                                    Text("\(template.name) (\(template.items.count))")
-                                                        .font(.subheadline)
-                                                }
-                                                .padding(.horizontal, 12)
-                                                .padding(.vertical, 6)
-                                                .background(loadedTemplateName == template.name ? Color.green.opacity(0.2) : Color(.systemGray6))
-                                                .foregroundStyle(loadedTemplateName == template.name ? .green : .primary)
-                                                .cornerRadius(16)
-                                                .overlay(
-                                                    RoundedRectangle(cornerRadius: 16)
-                                                        .stroke(loadedTemplateName == template.name ? Color.green.opacity(0.5) : Color.clear, lineWidth: 1)
-                                                )
-                                            }
-                                        }
-                                    }
-                                    
-                                    if let loaded = loadedTemplateName {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .font(.caption2)
-                                                .foregroundStyle(.green)
-                                            Text("Loaded: \(loaded)")
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    // MARK: 2. Title
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Title")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        TextField("Task title", text: $title, axis: .vertical)
+                            .font(.title3)
+                            .fontDesign(.rounded)
+                            .focused($titleFocused)
                     }
-                    
-                    // Progress Tracking
-                    Toggle(isOn: $task.isProgressEnabled) {
-                        Label("Track Progress", systemImage: "chart.bar.fill")
-                    }
-                    .tint(.blue)
                     
                     Divider()
                     
+                    // MARK: 3. Progress + Completed section (under title)
+                    progressAndCompletedSection
+                    
+                    Divider()
+                    
+                    // MARK: 4. Checklist
                     if isChecklistCategory || !checklistItems.isEmpty {
                         ChecklistEditorView(
                             items: $checklistItems,
@@ -157,26 +77,7 @@ struct EditTaskView: View {
                         Divider()
                     }
                     
-                    // Title
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Title")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        TextField("Task title", text: $title, axis: .vertical)
-                            .font(.title3)
-                            .focused($titleFocused)
-                    }
-                    
-                    Divider()
-                    
-                    // Completed toggle
-                    Toggle(isOn: $task.isCompleted) {
-                        Label("Completed", systemImage: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                    }
-                    
-                    Divider()
-                    
-                    // Priority
+                    // MARK: 5. Priority
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Priority")
                             .font(.subheadline)
@@ -191,35 +92,12 @@ struct EditTaskView: View {
                     
                     Divider()
                     
-                    // Due Date
-                    VStack(alignment: .leading, spacing: 8) {
-                        Toggle(isOn: $hasDueDate.animation(.easeInOut(duration: 0.2))) {
-                            Label("Due Date", systemImage: "calendar")
-                                .font(.subheadline)
-                        }
-                        .onChange(of: hasDueDate) {
-                            if !hasDueDate { hasTime = false }
-                        }
-                        if hasDueDate {
-                            DatePicker("", selection: $dueDate, displayedComponents: [.date])
-                                .datePickerStyle(.graphical)
-                                .transition(.opacity.combined(with: .move(edge: .top)))
-                            
-                            Toggle(isOn: $hasTime.animation(.easeInOut(duration: 0.2))) {
-                                Label("Set Time", systemImage: "clock")
-                                    .font(.subheadline)
-                            }
-                            
-                            if hasTime {
-                                DatePicker("", selection: $dueTime, displayedComponents: [.hourAndMinute])
-                                    .datePickerStyle(.compact)
-                            }
-                        }
-                    }
+                    // MARK: 6. Due Date (SF Symbol tap)
+                    dueDateSection
                     
                     Divider()
                     
-                    // Notes
+                    // MARK: 7. Notes
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Notes")
                             .font(.subheadline)
@@ -231,7 +109,7 @@ struct EditTaskView: View {
                     
                     Divider()
                     
-                    // Delete
+                    // MARK: 8. Delete
                     Button(role: .destructive) {
                         showDeleteConfirm = true
                     } label: {
@@ -289,6 +167,273 @@ struct EditTaskView: View {
                 notes = task.notes ?? ""
                 checklistItems = task.checklistItems ?? []
                 parseStoreFromTitle()
+            }
+        }
+    }
+    
+    // MARK: - Category Section
+    private var categorySection: some View {
+        Group {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isEditingCategory.toggle()
+                }
+            } label: {
+                HStack {
+                    if !category.isEmpty {
+                        Label {
+                            HStack(spacing: 4) {
+                                Text(category)
+                                if !selectedStore.isEmpty {
+                                    Text("·")
+                                        .foregroundStyle(.secondary)
+                                    Text(selectedStore)
+                                }
+                            }
+                        } icon: {
+                            Image(systemName: "tag.fill")
+                                .foregroundStyle(.green)
+                        }
+                        .font(.subheadline)
+                    } else {
+                        Text("No category")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: isEditingCategory ? "chevron.up" : "chevron.down")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            
+            if isEditingCategory {
+                CategoryPickerView(selectedCategory: $category)
+                    .onChange(of: category) {
+                        updateTitleForCategory()
+                    }
+                
+                if isChecklistCategory {
+                    StorePickerView(
+                        selectedStore: $selectedStore,
+                        onStoreChanged: { updateGroceryTitle() }
+                    )
+                    
+                    if !availableTemplates.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Load a Template")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            FlowLayout(spacing: 8) {
+                                ForEach(availableTemplates) { template in
+                                    Button {
+                                        loadTemplate(template)
+                                    } label: {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "doc.on.doc")
+                                                .font(.caption2)
+                                            Text("\(template.name) (\(template.items.count))")
+                                                .font(.subheadline)
+                                        }
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(loadedTemplateName == template.name ? Color.green.opacity(0.2) : Color(.systemGray6))
+                                        .foregroundStyle(loadedTemplateName == template.name ? .green : .primary)
+                                        .cornerRadius(16)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .stroke(loadedTemplateName == template.name ? Color.green.opacity(0.5) : Color.clear, lineWidth: 1)
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            if let loaded = loadedTemplateName {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.caption2)
+                                        .foregroundStyle(.green)
+                                    Text("Loaded: \(loaded)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // MARK: - Completion Section (Single row, two modes)
+    private var progressAndCompletedSection: some View {
+        HStack(spacing: 12) {
+            if task.isProgressEnabled {
+                // TRACK MODE: ProgressBarIcon left + slider | mode switch right with % inside
+                ProgressBarIcon(progress: task.isCompleted ? 100 : task.progressPercentage, size: 22)
+                
+                Slider(
+                    value: Binding(
+                        get: { task.isCompleted ? 100 : task.progressPercentage },
+                        set: { newValue in
+                            task.progressPercentage = newValue
+                            task.lastProgressUpdate = Date()
+                            if newValue >= 100 {
+                                task.isCompleted = true
+                                task.completedAt = Date()
+                            } else {
+                                task.isCompleted = false
+                                task.completedAt = nil
+                            }
+                            task.updatedAt = Date()
+                            task.syncStatus = SyncStatus.pending.rawValue
+                        }
+                    ),
+                    in: 0...100,
+                    step: 5
+                )
+                .tint(.blue)
+                
+                // Mode switch: circular arrows with percentage inside
+                modeSwitchButton
+            } else {
+                // SIMPLE MODE: Checkmark left (tap to complete) | mode switch right
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        task.isCompleted.toggle()
+                        task.completedAt = task.isCompleted ? Date() : nil
+                        task.updatedAt = Date()
+                        task.syncStatus = SyncStatus.pending.rawValue
+                    }
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                            .font(.title2)
+                            .foregroundStyle(task.isCompleted ? .green : .secondary)
+                            .contentTransition(.symbolEffect(.replace))
+                        Text(task.isCompleted ? "Completed" : "Mark Complete")
+                            .font(.body)
+                            .fontWeight(.medium)
+                            .foregroundStyle(task.isCompleted ? .green : .primary)
+                    }
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                
+                Spacer()
+                
+                // Mode switch: circular arrows
+                modeSwitchButton
+            }
+        }
+    }
+    
+    // MARK: - Mode Switch Button (circular arrows with % inside when tracking)
+    private var modeSwitchButton: some View {
+        Button {
+            // Step 1: Spin the arrows
+            withAnimation(.easeInOut(duration: 0.4)) {
+                modeSwitchRotation += 360
+            }
+            // Step 2: Switch mode halfway through the spin
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    task.isProgressEnabled.toggle()
+                }
+            }
+        } label: {
+            ZStack {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 28, weight: .light))
+                    .foregroundStyle(task.isProgressEnabled ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+                
+                // Percentage inside the arrows when in Track mode
+                if task.isProgressEnabled {
+                    Text("\(Int(task.isCompleted ? 100 : task.progressPercentage))")
+                        .font(.system(size: 9, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(.blue)
+                }
+            }
+            .rotationEffect(.degrees(modeSwitchRotation))
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+    
+    // MARK: - Due Date Section (SF Symbol tap)
+    private var dueDateSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 16) {
+                // Calendar icon: always visible, tap to toggle due date
+                Button {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        hasDueDate.toggle()
+                        if !hasDueDate { hasTime = false }
+                    }
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "calendar")
+                            .font(.title2)
+                            .foregroundStyle(hasDueDate ? .blue : .secondary)
+                            .symbolEffect(.bounce, value: hasDueDate)
+                        // "Due Date" label only when calendar is closed
+                        if !hasDueDate {
+                            Text("Due Date")
+                                .font(.body)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.primary)
+                                .transition(.opacity.combined(with: .move(edge: .leading)))
+                        }
+                    }
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                
+                // Clock + Set Time: appears when calendar is open
+                if hasDueDate {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            hasTime.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "clock")
+                                .font(.title2)
+                                .foregroundStyle(hasTime ? .blue : .secondary)
+                                .symbolEffect(.bounce, value: hasTime)
+                            Text("Set Time")
+                                .font(.body)
+                                .fontWeight(.medium)
+                                .foregroundStyle(hasTime ? .blue : .primary)
+                        }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .transition(.opacity.combined(with: .move(edge: .leading)))
+                    
+                    if hasTime {
+                        Spacer()
+                        DatePicker("", selection: $dueTime, displayedComponents: [.hourAndMinute])
+                            .labelsHidden()
+                            .datePickerStyle(.compact)
+                            .transition(.opacity)
+                    }
+                }
+            }
+            
+            if hasDueDate {
+                DatePicker("", selection: $dueDate, displayedComponents: [.date])
+                    .datePickerStyle(.graphical)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
     }
@@ -435,6 +580,36 @@ struct EditTaskView: View {
         dateComponents.hour = timeComponents.hour
         dateComponents.minute = timeComponents.minute
         return calendar.date(from: dateComponents) ?? date
+    }
+}
+
+// MARK: - SymbolTapButton
+private struct SymbolTapButton: View {
+    let icon: String
+    let label: String
+    let isActive: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                action()
+            }
+        }) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .foregroundStyle(isActive ? .blue : .secondary)
+                    .symbolEffect(.bounce, value: isActive)
+                Text(label)
+                    .font(.body)
+                    .fontWeight(.medium)
+                    .foregroundStyle(isActive ? .blue : .primary)
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 

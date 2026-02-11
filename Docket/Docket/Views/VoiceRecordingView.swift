@@ -38,6 +38,7 @@ struct VoiceRecordingView: View {
     @State private var errorMessage: String?
     @State private var conversationTimeoutTask: _Concurrency.Task<Void, Never>?
     @State private var isProcessingUtterance = false
+    @State private var isInClosingFlow = false // true after "Anything else?" or "Will this be all?"
     @AppStorage("useWhisperTranscription") private var useWhisperTranscription = false
     @AppStorage("progressTrackingDefault") private var progressTrackingDefault = false
     private let conversationTimeoutSeconds: TimeInterval = 60
@@ -424,35 +425,31 @@ struct VoiceRecordingView: View {
         VoiceTrace.trace("transcribedText cleared")
         #endif
         
-        // Check if this is a confirmation after tasks are ready
-        if !parsedTasks.isEmpty {
-            if isConfirmation(text) {
-                // User confirmed - save tasks
-                isProcessingUtterance = false
-                saveTasks(parsedTasks)
-                return
-            } else if isRejection(text) {
-                // User rejected - cancel
-                isProcessingUtterance = false
-                dismiss()
-                return
-            }
-            // Otherwise treat as correction/new input — falls through
-        }
+        let classifier = IntentClassifier()
+        let context = IntentClassifier.Context(
+            isInClosingFlow: isInClosingFlow,
+            hasPendingTasks: !parsedTasks.isEmpty
+        )
+        let intent = classifier.classify(text, context: context)
         
-        // Check if user wants to stop after "Anything else?"
-        // (parsedTasks is empty after save, so check for dismissal phrases)
-        if isDismissal(text) {
+        switch intent {
+        case .confirm:
+            isProcessingUtterance = false
+            saveTasks(parsedTasks)
+            return
+        case .reject:
             isProcessingUtterance = false
             dismiss()
             return
-        }
-        
-        // Friendly conversational shortcut: acknowledge gratitude without sending
-        // an unnecessary parser turn when user is simply closing politely.
-        if parsedTasks.isEmpty && isGratitude(text) {
+        case .dismiss:
+            isProcessingUtterance = false
+            isInClosingFlow = false
+            dismiss()
+            return
+        case .gratitude:
             let followUp = "You're welcome. Will this be all?"
             isProcessingUtterance = false
+            isInClosingFlow = true
             ttsManager.speakWithBoundedSync(text: followUp, boundedWait: 0.75, onTextReveal: { [self] in
                 messages.append(ConversationMessage(role: "assistant", content: followUp))
                 state = .speaking
@@ -461,9 +458,12 @@ struct VoiceRecordingView: View {
                 _Concurrency.Task { await speechManager.startRecording() }
             })
             return
+        case .taskRequest:
+            isInClosingFlow = false
+            break
         }
         
-        // Normal flow - send to parser and handle response
+        // taskRequest: send to parser and handle response
         #if DEBUG
         VoiceTrace.trace("state -> processing, handleUserUtterance")
         #endif
@@ -479,50 +479,6 @@ struct VoiceRecordingView: View {
         ttsManager.speak(message) {
             state = .idle
         }
-    }
-    
-    /// Checks if any phrase matches as a whole word/phrase (not substring).
-    /// Prevents "note" from matching "no", "sure thing" from false-matching, etc.
-    private func matchesPhrase(_ text: String, phrases: [String]) -> Bool {
-        let lowercased = text.lowercased()
-        for phrase in phrases {
-            // Use word boundary regex: \b ensures "no" doesn't match inside "note"
-            let pattern = "\\b\(NSRegularExpression.escapedPattern(for: phrase))\\b"
-            if lowercased.range(of: pattern, options: .regularExpression) != nil {
-                return true
-            }
-        }
-        return false
-    }
-    
-    private func isConfirmation(_ text: String) -> Bool {
-        let confirmations = ["yes", "yeah", "yep", "sure", "ok", "okay", "add it", "add them", "add all", "confirm", "sounds good", "that's right", "correct"]
-        return matchesPhrase(text, phrases: confirmations)
-    }
-    
-    private func isRejection(_ text: String) -> Bool {
-        let rejections = ["no", "nope", "cancel", "never mind", "forget it", "don't", "stop"]
-        return matchesPhrase(text, phrases: rejections)
-    }
-    
-    private func isDismissal(_ text: String) -> Bool {
-        let dismissals = [
-            "no", "nope", "no thanks",
-            "that's all", "that's it",
-            "i'm done", "i'm good",
-            "nothing", "all done", "all good",
-            "bye", "goodbye", "see you", "talk to you later"
-        ]
-        return matchesPhrase(text, phrases: dismissals)
-    }
-    
-    private func isGratitude(_ text: String) -> Bool {
-        let gratitude = [
-            "thanks", "thank you",
-            "thanks a lot", "thank you very much",
-            "appreciate it", "much appreciated"
-        ]
-        return matchesPhrase(text, phrases: gratitude)
     }
     
     /// Builds TaskContext array from active tasks (capped at 50 for context window)
@@ -720,6 +676,7 @@ struct VoiceRecordingView: View {
         cancelConversationTimeout()
         
         guard !tasks.isEmpty else {
+            isInClosingFlow = true
             let followUp = "Got it. Anything else?"
             ttsManager.speakWithBoundedSync(text: followUp, boundedWait: 0.75, onTextReveal: { [self] in
                 messages.append(ConversationMessage(role: "assistant", content: followUp))
@@ -825,6 +782,7 @@ struct VoiceRecordingView: View {
             parsedTasks = []
             
             // Ask if the user wants to add more tasks
+            isInClosingFlow = true
             let taskCount = tasks.count
             let followUp = taskCount == 1 ? "Done! Anything else?" : "All \(taskCount) added! Anything else?"
             ttsManager.speakWithBoundedSync(text: followUp, boundedWait: 0.75, onTextReveal: { [self] in
@@ -905,6 +863,7 @@ struct VoiceRecordingView: View {
             parsedTasks = []
             
             // Confirm and ask for more
+            isInClosingFlow = true
             let followUp = "Updated! Anything else?"
             ttsManager.speakWithBoundedSync(text: followUp, boundedWait: 0.75, onTextReveal: { [self] in
                 messages.append(ConversationMessage(role: "assistant", content: followUp))
@@ -1165,6 +1124,7 @@ struct VoiceRecordingView: View {
     }
 
     private func askAnythingElse() {
+        isInClosingFlow = true
         let followUp = "Anything else?"
         ttsManager.speakWithBoundedSync(text: followUp, boundedWait: 0.75, onTextReveal: { [self] in
             messages.append(ConversationMessage(role: "assistant", content: followUp))

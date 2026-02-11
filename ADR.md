@@ -118,6 +118,21 @@
   - Realtime sync reduces pull-based latency
 - **Date:** 2026-02-08 (updated 2026-02-10 with Sharing System V2)
 
+## ADR-009: Voice Intent Classification Extraction (v1.1)
+- **Decision:** Extract deterministic voice intent logic into a dedicated `IntentClassifier` struct in `Managers/`, separate from `VoiceRecordingView`
+- **Context:** Intent detection (confirm, reject, dismiss, gratitude) and phrase lists were embedded directly in VoiceRecordingView (~1500 lines). The view mixed UI, orchestration, and classification logic.
+- **Options Considered:**
+  - Keep logic in VoiceRecordingView (status quo, hard to test, monolithic)
+  - Extract to IntentClassifier (pure, testable, single responsibility)
+  - Move to Edge Function (adds latency, contradicts ADR-007's "deterministic intents stay local")
+- **Decision:** Extract to `IntentClassifier` — a stateless struct with `classify(text:context:)` returning `VoiceIntent` enum. Phrase lists and word-boundary matching live in one file. VoiceRecordingView becomes a thin dispatcher (switch on intent → action).
+- **Consequences:**
+  - Same latency (on-device, no new allocations)
+  - Unit-testable without SwiftUI/SwiftData
+  - Single source of truth for phrase lists; maps 1:1 to VOICE-INTENT-RULES.md
+  - VoiceRecordingView shrinks; orchestration remains in view
+- **Date:** 2026-02-11
+
 ## Known Risks
 
 1. **SwiftData maturity:** Newer framework, may have undiscovered bugs or limitations
