@@ -76,7 +76,7 @@ Jon — a busy professional juggling sales work, side projects (Closelo), family
 
 ### Could-Have (v1.2+)
 1. Siri shortcuts
-2. Advanced voice parsing (recurring, subtasks)
+2. Advanced voice parsing (recurring — done; subtasks — pending)
 3. Personalization adaptation loop (learn from corrections)
 4. Widgets
 5. Apple Watch app

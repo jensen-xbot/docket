@@ -31,6 +31,8 @@ struct AddTaskView: View {
     @State private var storeStore = StoreStore()
     @AppStorage("progressTrackingDefault") private var progressTrackingDefault = false
     @State private var isProgressEnabled: Bool = false
+    @State private var isRecurring: Bool = false
+    @State private var recurrenceRule: String = "weekly"
     
     private var isValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -45,7 +47,7 @@ struct AddTaskView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    // Category (chip picker)
+                    // MARK: 1. Category (chip picker — first since it drives auto-title + checklist)
                     CategoryPickerView(selectedCategory: $category)
                         .onChange(of: category) {
                             updateTitleForCategory()
@@ -108,23 +110,7 @@ struct AddTaskView: View {
                         }
                     }
                     
-                    // Progress Tracking
-                    Toggle(isOn: $isProgressEnabled) {
-                        Label("Track Progress", systemImage: "chart.bar.fill")
-                    }
-                    .tint(.blue)
-                    
-                    Divider()
-                    
-                    if isChecklistCategory {
-                        ChecklistEditorView(
-                            items: $checklistItems,
-                            onSaveTemplate: { promptSaveTemplate() }
-                        )
-                        Divider()
-                    }
-                    
-                    // Title
+                    // MARK: 2. Title
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Title")
                             .font(.subheadline)
@@ -134,9 +120,18 @@ struct AddTaskView: View {
                             .focused($titleFocused)
                     }
                     
+                    // MARK: 3. Checklist (conditional)
+                    if isChecklistCategory {
+                        Divider()
+                        ChecklistEditorView(
+                            items: $checklistItems,
+                            onSaveTemplate: { promptSaveTemplate() }
+                        )
+                    }
+                    
                     Divider()
                     
-                    // Priority
+                    // MARK: 4. Priority
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Priority")
                             .font(.subheadline)
@@ -151,35 +146,20 @@ struct AddTaskView: View {
                     
                     Divider()
                     
-                    // Due Date
-                    VStack(alignment: .leading, spacing: 8) {
-                        Toggle(isOn: $hasDueDate.animation(.easeInOut(duration: 0.2))) {
-                            Label("Due Date", systemImage: "calendar")
-                                .font(.subheadline)
-                        }
-                        .onChange(of: hasDueDate) {
-                            if !hasDueDate { hasTime = false }
-                        }
-                        if hasDueDate {
-                            DatePicker("", selection: $dueDate, displayedComponents: [.date])
-                                .datePickerStyle(.graphical)
-                                .transition(.opacity.combined(with: .move(edge: .top)))
-                            
-                            Toggle(isOn: $hasTime.animation(.easeInOut(duration: 0.2))) {
-                                Label("Set Time", systemImage: "clock")
-                                    .font(.subheadline)
-                            }
-                            
-                            if hasTime {
-                                DatePicker("", selection: $dueTime, displayedComponents: [.hourAndMinute])
-                                    .datePickerStyle(.compact)
-                            }
-                        }
+                    // MARK: 5. Track Progress toggle
+                    Toggle(isOn: $isProgressEnabled) {
+                        Label("Track Progress", systemImage: "chart.bar.fill")
                     }
+                    .tint(.blue)
                     
                     Divider()
                     
-                    // Notes
+                    // MARK: 6. Due Date (matches Edit Task design)
+                    dueDateSection
+                    
+                    Divider()
+                    
+                    // MARK: 7. Notes
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Notes")
                             .font(.subheadline)
@@ -227,6 +207,117 @@ struct AddTaskView: View {
         }
     }
     
+    // MARK: - Due Date Section (matches Edit Task: tap calendar/clock, graphical picker)
+    private var dueDateSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 16) {
+                // Calendar icon: tap to toggle due date
+                Button {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        hasDueDate.toggle()
+                        if !hasDueDate {
+                            hasTime = false
+                            isRecurring = false
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "calendar")
+                            .font(.title2)
+                            .foregroundStyle(hasDueDate ? .blue : .secondary)
+                            .symbolEffect(.bounce, value: hasDueDate)
+                        if !hasDueDate {
+                            Text("Due Date")
+                                .font(.body)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.primary)
+                                .transition(.opacity.combined(with: .move(edge: .leading)))
+                        }
+                    }
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                
+                // Recurring: appears when calendar is open, between Calendar and Set Time
+                if hasDueDate {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            isRecurring.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "repeat")
+                                .font(.title2)
+                                .foregroundStyle(isRecurring ? .blue : .secondary)
+                                .symbolEffect(.bounce, value: isRecurring)
+                            if !hasTime {
+                                Text("Recurring")
+                                    .font(.body)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(isRecurring ? .blue : .primary)
+                                    .transition(.opacity.combined(with: .move(edge: .leading)))
+                            }
+                        }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .transition(.opacity.combined(with: .move(edge: .leading)))
+                }
+                
+                // Clock + Set Time: appears when calendar is open
+                if hasDueDate {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            hasTime.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "clock")
+                                .font(.title2)
+                                .foregroundStyle(hasTime ? .blue : .secondary)
+                                .symbolEffect(.bounce, value: hasTime)
+                            Text("Set Time")
+                                .font(.body)
+                                .fontWeight(.medium)
+                                .foregroundStyle(hasTime ? .blue : .primary)
+                        }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .transition(.opacity.combined(with: .move(edge: .leading)))
+                    
+                    if hasTime {
+                        Spacer()
+                        DatePicker("", selection: $dueTime, displayedComponents: [.hourAndMinute])
+                            .labelsHidden()
+                            .datePickerStyle(.compact)
+                            .transition(.opacity)
+                    }
+                }
+            }
+            
+            if hasDueDate {
+                DatePicker("", selection: $dueDate, displayedComponents: [.date])
+                    .datePickerStyle(.graphical)
+                    .transition(.opacity.combined(with: .move(edge: .leading)))
+                
+                // Recurrence rule picker when recurring is active
+                if isRecurring {
+                    Picker("Recurrence", selection: $recurrenceRule) {
+                        Text("Daily").tag("daily")
+                        Text("Weekly").tag("weekly")
+                        Text("Monthly").tag("monthly")
+                    }
+                    .pickerStyle(.segmented)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+        }
+    }
+    
     private func loadTemplate(_ template: GroceryStore) {
         checklistItems = template.items.enumerated().map { index, name in
             ChecklistItem(id: UUID(), name: name, isChecked: false, sortOrder: index)
@@ -257,7 +348,8 @@ struct AddTaskView: View {
             notes: notes.isEmpty ? nil : notes,
             checklistItems: checklistItems.isEmpty ? nil : checklistItems,
             syncStatus: .pending,
-            isProgressEnabled: isProgressEnabled
+            isProgressEnabled: isProgressEnabled,
+            recurrenceRule: hasDueDate && isRecurring ? recurrenceRule : nil
         )
         
         if isChecklistCategory && !checklistItems.isEmpty {

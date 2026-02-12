@@ -1,6 +1,7 @@
 # TODO: Docket
 
 ## MVP (Phases 1-4) - COMPLETE
+
 - [x] Create project repository
 - [x] Initialize Xcode project (SwiftUI, iOS 17+)
 - [x] Set up project folder structure
@@ -25,6 +26,7 @@
 ## v1.0: Cloud Sync Foundation - COMPLETE
 
 ### Phase 5: Cloud Infrastructure
+
 - [x] Set up Supabase project
 - [x] Create database schema (Tasks table)
 - [x] Configure Row Level Security (RLS) policies
@@ -44,6 +46,7 @@
 ## v1.1: Conversational Voice-to-Task - IN PROGRESS
 
 ### P0: Active Stability Hotfixes — Voice Hotfix One-Pass DONE
+
 - [x] **Reproduce + eliminate lingering transcription flicker**
   - [x] Add deterministic repro matrix (see below)
   - [x] Add temporary timestamped event tracing (DEBUG only: `[VoiceTrace]`)
@@ -62,6 +65,7 @@
 - **Residual risk:** Remove `#if DEBUG` VoiceTrace after device validation. Manual QA for interruption + long dictation recommended.
 
 ### Phase 6: Speech Capture + TTS Foundation - COMPLETE
+
 - [x] Add Speech framework entitlement
 - [x] Add `NSMicrophoneUsageDescription` and `NSSpeechRecognitionUsageDescription` to Info.plist
 - [x] Create SpeechRecognitionManager (SFSpeechRecognizer + AVAudioEngine)
@@ -75,6 +79,7 @@
 - [x] Test on device: speak -> transcription -> TTS readback -> mic restarts
 
 ### Phase 7: Conversational AI Parsing - COMPLETE
+
 - [x] Set up OpenRouter account + API key
 - [x] Supabase Edge Function `parse-voice-tasks` (conversational system prompt, gpt-4.1-mini)
 - [x] Edge Function receives `messages[]` array (not single text)
@@ -92,6 +97,7 @@
 - [x] English only for v1.1
 
 ### Phase 8: Confirmation + Continuation - COMPLETE
+
 - [x] Wire up: conversation complete -> auto-save if no "?" in summary
 - [x] Voice confirmation: listen for "yes" / "add it" after AI asks "Want me to add?"
 - [x] "Anything else?" flow: after saving, ask if user wants to add more tasks
@@ -106,6 +112,7 @@
 - [x] TTS mute toggle in Settings
 
 ### Phase 9: Voice Polish — COMPLETE
+
 - [x] Upgrade TTS to OpenAI TTS API (tts-1, ~$0.0015/response) — natural-sounding voices replace robotic AVSpeechSynthesizer
   - [x] Edge Function `text-to-speech` calls OpenAI TTS API, returns MP3 audio
   - [x] TTSManager uses AVAudioPlayer for OpenAI TTS, keeps AVSpeechSynthesizer as fallback
@@ -127,16 +134,17 @@
   - [x] Green audio-level indicator inside mic icon (RMS + EMA smoothing at ~12fps)
   - [x] Double-processing guard (isProcessingUtterance flag)
 - [x] Siri Shortcuts integration
-- [ ] Advanced parsing (recurring tasks, subtasks)
+- [x] Recurring tasks (data model, UI in Edit/Add, task row icon, voice parsing)
 
 ### Phase 10: Personalization Adaptation (v1.2 Foundation)
-- [ ] Personalization architecture + privacy spec (opt-in, reset, retention window)
-- [ ] Add `TaskSource` metadata to distinguish voice-created tasks from manual tasks
-- [ ] Snapshot-based correction tracking on edits to voice-created tasks
-- [ ] Create `record-corrections` Edge Function with auth, validation, deduplication, and rate limiting
-- [ ] Create `user_voice_profiles` schema (vocabulary aliases, category mappings, store aliases, time habits)
-- [ ] Inject compact personalization context into `parse-voice-tasks` prompt
-- [ ] Add UI controls in Profile: "Personalization On/Off" + "Reset learned voice data"
+
+- [x] Personalization architecture + privacy spec (opt-in, reset, retention window)
+- [x] Add `TaskSource` metadata to distinguish voice-created tasks from manual tasks
+- [x] Snapshot-based correction tracking on edits to voice-created tasks
+- [x] Create `record-corrections` Edge Function with auth, validation, deduplication, and rate limiting
+- [x] Create `user_voice_profiles` schema (vocabulary aliases, category mappings, store aliases, time habits)
+- [x] Inject compact personalization context into `parse-voice-tasks` prompt
+- [x] Add UI controls in Profile: "Personalization On/Off" + "Reset learned voice data"
 - [ ] Add metrics dashboard:
   - [ ] edit-after-voice rate
   - [ ] auto-confirm rate
@@ -144,7 +152,72 @@
   - [ ] TTS fallback rate
   - [ ] personalization hit rate (alias/mapping applied)
 
+### Phase 11: Inline Task Cards in Voice Chat
+Voice-created tasks appear as editable cards directly in the chat window. Tasks auto-save immediately AND show as inline cards that phase in one-by-one. Users can expand a card to edit or delete without leaving the voice session. Only one card expands at a time. Delete requires confirmation.
+
+- [ ] ChatTaskCard view
+  - [ ] Compact state: full-width card showing title, due date badge, priority indicator, category chip
+  - [ ] Expanded state: inline edit fields (title TextField, priority picker, date picker, category chips, notes)
+  - [ ] Only one card expanded at a time (tapping another collapses the current)
+  - [ ] Update button: saves edits to SwiftData + SyncEngine push, collapses card
+  - [ ] Delete button: shows confirmation ("Delete this task?"), removes from SwiftData + Supabase
+  - [ ] Smooth expand/collapse animation (spring, ~0.3s)
+- [ ] Staggered card appearance
+  - [ ] After AI summary + auto-save, cards phase in one-by-one (~0.3s delay between each)
+  - [ ] Transition: move from bottom + opacity fade-in
+  - [ ] ScrollView auto-scrolls as each card appears
+- [ ] Integration with VoiceRecordingView
+  - [ ] Insert task cards into chat after the AI summary bubble (not in displayMessages — separate rendered section)
+  - [ ] Track `@State var savedTaskCards: [Task]` for cards currently visible in chat
+  - [ ] Track `@State var expandedCardId: UUID?` for single-expand behavior
+  - [ ] Wire up inline edits: update Task fields, push via SyncEngine, trigger voice snapshot correction detection
+  - [ ] Wire up inline delete: confirmation dialog, delete from SwiftData, remove card from list
+- [ ] Session continuity
+  - [ ] Voice session stays open during card editing (state machine unchanged)
+  - [ ] "Anything else?" TTS plays after cards finish appearing (not after each card)
+  - [ ] Mic auto-restarts after TTS finishes (existing behavior preserved)
+  - [ ] Conversation messages[] array intact — user can continue adding tasks or making corrections
+- [ ] Voice personalization hook
+  - [ ] Inline edits to voice-created tasks trigger correction detection (same as EditTaskView)
+  - [ ] Compare edited fields against voiceSnapshotData, fire-and-forget to record-corrections
+
+### Phase 12: Advanced Subtasks (Unlimited Nesting)
+
+Full subtask support: each subtask is a full Task with title, due dates, priority, notes, collaboration — unlimited nesting depth. Voice + manual creation.
+
+- [ ] Data model
+  - [ ] Add `parentTaskId: UUID?` to Task (nil = top-level task)
+  - [ ] Self-referential relationship for unlimited nesting
+  - [ ] Computed helpers: `depth`, `root`, `children` (or query via modelContext)
+  - [ ] Progress auto-calculation: parent = completed subtasks / total subtasks when `isProgressEnabled`
+- [ ] Database migration
+  - [ ] Create `014_add_subtasks.sql`: add `parent_task_id` FK referencing `tasks(id)`, index for hierarchy queries
+  - [ ] Update RLS policies for shared subtasks (inherit parent share context)
+- [ ] Swift models
+  - [ ] Task: `parentTaskId`, init/encode/decode updates
+  - [ ] TaskDTO: `parentTaskId` (parent_task_id)
+  - [ ] ParsedTask: `subtasks: [ParsedTask]?` for voice-created nested tasks
+  - [ ] TaskContext + TaskChanges: include subtask info for voice updates
+  - [ ] SubtaskGroup or equivalent helper for flattened tree display
+- [ ] UI: Manual creation
+  - [ ] AddTaskView / EditTaskView: Nested subtask list (add, reorder, delete subtasks)
+  - [ ] TaskRowView: Indented subtask rows with visual hierarchy
+  - [ ] TaskListView: Expand/collapse parent rows; show subtask count badge
+  - [ ] Progress: Parent task auto-updates from subtask completion when progress enabled
+- [ ] UI: Voice creation
+  - [ ] Edge Function prompt: Parse "with subtasks", compound tasks ("Plan trip: book flight, reserve hotel, pack bags")
+  - [ ] ParsedTask gains `subtasks: [ParsedTask]?` with recursive structure
+  - [ ] saveTasks(): Recursive creation — parent first, then children (depth-first)
+  - [ ] TaskConfirmationView: Expandable nested preview before confirm
+- [ ] Collaboration
+  - [ ] Subtasks inherit parent sharing (task_shares via parent)
+  - [ ] Shared subtask edits propagate via Realtime; both users see nested updates
+- [ ] Sync
+  - [ ] SyncEngine: Push parent before children; pull maintains hierarchy
+  - [ ] Offline queue: Respect parent-child order on flush
+
 ### Pre-Launch Hardening
+
 - [x] Edge Function rate limiting (prevent abuse/runaway costs — 60 req/hr/user)
 - [x] Edge Function request timeout (15s abort controller — prevents hanging requests)
 - [ ] Transcription retry logic (auto-retry on transient SFSpeechRecognizer failures, max 2 retries)
@@ -162,16 +235,20 @@
   - [ ] Phone call interrupts → stops recording, graceful recovery
 
 ### Optimization (post-launch)
+
 - [ ] Task context trimming (send only incomplete + recent 7 days, cap at 20 tasks)
 - [ ] Task context hash caching (skip re-sending if task list unchanged between turns)
 
 ### Analytics
+
 - [ ] Voice session tracking (duration, tasks created, turns, TTS voice used)
 - [ ] Error tracking (transcription failures, AI parse errors, TTS fallback rate)
 - [ ] Engagement metrics (voice vs manual creation ratio, edit-after-voice rate)
 
 ## Sharing System V2 (Epic)
+
 **Locked decisions (2026-02):**
+
 - **Editing model:** Both users can edit shared tasks; last-write-wins conflict behavior.
 - **Invite gating:** Require invite/connection acceptance for new contacts; existing accepted contacts can share immediately.
 - **Voice latency:** Deterministic control intents stay local; semantic parsing stays in Edge Function.
@@ -213,6 +290,7 @@
 - [ ] Shared tasks: Both users see and update progress; Realtime trigger propagates to recipient
 
 ## Future / v2.0
+
 - [x] Voice-aware grocery lists
   - [x] Send user's store names + template item counts as context to Edge Function
   - [x] If grocery is the only ask -> "Do you have a specific store in mind?"
@@ -239,6 +317,7 @@
 ## Technical Decisions Made
 
 ### Voice UX Learnings (Feb 2026)
+
 - **Live transcription → committed message flicker:** SwiftUI treats views with different `.id()` values as completely separate elements. When the live bubble had `.id("live")` and the committed message got `.id("msg-5")`, SwiftUI would animate one out and one in — even though they had identical text. Fix: use a unified `displayMessages` computed property where the live text gets `id: "msg-\(messages.count)"` — the same ID it will have once committed. SwiftUI sees it as one continuous view.
 - **SFSpeechRecognizer stale callbacks:** Calling `endAudio()` or `cancel()` on a recognition request triggers one final result callback on a background thread. That callback dispatches to MainActor and can overwrite `transcribedText` after the view already committed it to messages. Fix: `guard manager.isRecording else { return }` in the recognition handler — once stopped, all late callbacks are dropped.
 - **`.animation(.repeatForever)` doesn't restart:** SwiftUI's value-based `.animation(.repeatForever, value:)` only reliably starts on the first value change. When state cycles `.listening` → `.speaking` → `.listening`, the repeat animation doesn't restart. Fix: use `phaseAnimator([false, true], trigger: state)` which restarts the cycle on every trigger change.
@@ -248,6 +327,7 @@
 - **Latency split (client vs function):** Keep deterministic control intents on-device (dismiss/thanks/session-control) and reserve Edge Function calls for semantic task parsing (`question/complete/update/delete`) to avoid unnecessary round-trips.
 
 ### Personalization Methodology (v1.2)
+
 - **Learn from corrections, not assumptions:** only learn when users explicitly edit AI output
 - **Prioritize high-signal fields first:** title vocabulary, category mapping, store aliases, time habits
 - **Keep context compact:** send top ranked mappings by recency/frequency, not full history
@@ -255,11 +335,12 @@
 - **Measure quality with behavior:** success = fewer post-voice edits + faster confirmation, not just model confidence
 
 ### Voice Architecture (v1.1) — Updated 2026-02-08
+
 - **Mode:** Conversational multi-turn (AI asks follow-ups when info is missing)
 - **Transcription:** Apple SFSpeechRecognizer (on-device, free, fast) with optional Whisper API fallback (better accent accuracy)
 - **Parsing:** gpt-4.1-mini via OpenRouter -> Supabase Edge Function
 - **Conversation state:** messages[] array managed on iOS, Edge Function is stateless
-- **Extraction:** Title, due date (with optional time), priority, category, notes, share target
+- **Extraction:** Title, due date (with optional time), priority, category, notes, share target, recurrence (daily/weekly/monthly)
 - **Confirmation:** TTS readback (AVSpeechSynthesizer, on-device) + auto-save if no "?" in summary
 - **Continuation:** "Anything else?" after each task — user can chain multiple tasks in one session
 - **Corrections:** Supported mid-conversation ("actually make it Wednesday") — user can correct after AI returns tasks
@@ -278,12 +359,14 @@
 - **Swift 6:** See SWIFT6-CONCURRENCY-GUIDE.md for all concurrency fixes
 
 ### Cloud Architecture (v1.0)
+
 - **Backend:** Supabase (PostgreSQL + Auth + Realtime)
 - **Sync:** Bi-directional with offline queue
 - **Auth:** Apple Sign In + email/password
 - **Notifications:** Local notifications for due dates
 
 ## Research Completed
+
 - [x] Voice-to-text options (Apple Speech vs Whisper)
 - [x] Audio streaming architecture
 - [x] WebSocket gateway patterns (for v1.1)
@@ -292,6 +375,7 @@
 - See [VOICE-TO-TASK-PLAN.md](VOICE-TO-TASK-PLAN.md) for voice details
 
 ## Next Steps
-1. Advanced parsing (recurring tasks, subtasks)
+
+1. Phase 11: Advanced subtasks (unlimited nesting, voice + manual — see Phase 11 above)
 2. App Store submission (see APP-STORE-GUIDE.md)
 3. See [VOICE-TO-TASK-V2.md](VOICE-TO-TASK-V2.md) for full architecture

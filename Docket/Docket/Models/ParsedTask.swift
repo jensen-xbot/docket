@@ -13,6 +13,7 @@ struct ParsedTask: Codable, Identifiable {
     var suggestion: String?
     var checklistItems: [String]? // AI-suggested item names (ad-hoc grocery list)
     var useTemplate: String? // store name whose template to load (template-based grocery list)
+    var recurrenceRule: String? // "daily", "weekly", "monthly" — nil = not recurring
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -25,7 +26,17 @@ struct ParsedTask: Codable, Identifiable {
         case suggestion
         case checklistItems
         case useTemplate
+        case recurrenceRule
     }
+}
+
+/// Correction entry for voice personalization (sent to record-corrections Edge Function)
+struct CorrectionEntry: Codable {
+    let taskId: String
+    let fieldName: String
+    let originalValue: String?
+    let correctedValue: String?
+    let category: String? // optional context for hasTime (task category when correcting time preference)
 }
 
 struct ConversationMessage: Codable {
@@ -52,6 +63,7 @@ struct TaskContext: Codable {
     let isCompleted: Bool
     let progressPercentage: Double
     let isProgressEnabled: Bool
+    let recurrenceRule: String? // "daily", "weekly", "monthly"
 }
 
 /// Context about a grocery store template, sent to Edge Function for awareness
@@ -76,6 +88,8 @@ struct TaskChanges: Codable {
     var checkChecklistItems: [String]? // Check items (mark as done)
     var uncheckChecklistItems: [String]? // Uncheck items
     var progressPercentage: Double? // "set progress on X to 75%"
+    var isProgressEnabled: Bool? // "switch X to progress tracking", "enable progress on X"
+    var recurrenceRule: String? // "daily", "weekly", "monthly" — nil = turn off recurring
     
     /// Decodes dueDate string to Date + hasTime flag
     func decodeDueDate() -> (date: Date?, hasTime: Bool) {
@@ -165,5 +179,31 @@ extension ParsedTask {
         suggestion = try container.decodeIfPresent(String.self, forKey: .suggestion)
         checklistItems = try container.decodeIfPresent([String].self, forKey: .checklistItems)
         useTemplate = try container.decodeIfPresent(String.self, forKey: .useTemplate)
+        recurrenceRule = try container.decodeIfPresent(String.self, forKey: .recurrenceRule)
+    }
+}
+
+extension ParsedTask {
+    func toVoiceSnapshot() -> VoiceSnapshot {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate]
+        formatter.timeZone = TimeZone.current
+        var dueDateStr: String?
+        if hasTime, let d = dueDate {
+            let dtFormatter = DateFormatter()
+            dtFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm"
+            dtFormatter.timeZone = TimeZone.current
+            dueDateStr = dtFormatter.string(from: d)
+        } else if let d = dueDate {
+            dueDateStr = formatter.string(from: d)
+        }
+        return VoiceSnapshot(
+            title: title,
+            dueDate: dueDateStr,
+            hasTime: hasTime,
+            priority: priority,
+            category: category,
+            notes: notes
+        )
     }
 }

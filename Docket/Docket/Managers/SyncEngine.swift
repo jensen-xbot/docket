@@ -105,6 +105,8 @@ class SyncEngine {
                         existing.progressPercentage = dto.progressPercentage
                         existing.isProgressEnabled = dto.isProgressEnabled
                         existing.lastProgressUpdate = dto.lastProgressUpdate
+                        existing.taskSource = dto.taskSource
+                        existing.voiceSnapshotData = dto.voiceSnapshot.flatMap { try? JSONEncoder().encode($0) }
                         existing.isShared = false
                         existing.updatedAt = dto.updatedAt
                         existing.syncStatus = SyncStatus.synced.rawValue
@@ -143,6 +145,8 @@ class SyncEngine {
                         existing.progressPercentage = dto.progressPercentage
                         existing.isProgressEnabled = dto.isProgressEnabled
                         existing.lastProgressUpdate = dto.lastProgressUpdate
+                        existing.taskSource = dto.taskSource
+                        existing.voiceSnapshotData = dto.voiceSnapshot.flatMap { try? JSONEncoder().encode($0) }
                         existing.isShared = true
                         existing.updatedAt = dto.updatedAt
                         existing.syncStatus = SyncStatus.synced.rawValue

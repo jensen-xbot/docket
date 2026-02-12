@@ -2,6 +2,21 @@ import Foundation
 import Supabase
 import _Concurrency
 
+/// Compact personalization context for parse-voice-tasks prompt injection
+struct VoicePersonalization: Codable {
+    let vocabularyAliases: [[String: String]]?  // top 10: [{"spoken": "Krogers", "canonical": "Kroger"}]
+    let categoryMappings: [[String: String]]?   // top 10: [{"from": "Shopping", "to": "Groceries"}]
+    let storeAliases: [[String: String]]?       // top 5: [{"spoken": "TJs", "canonical": "Trader Joe's"}]
+    let timeHabits: [[String: String]]?         // top 5: [{"category": "Work", "pattern": "usually_has_time"}]
+    
+    enum CodingKeys: String, CodingKey {
+        case vocabularyAliases = "vocabularyAliases"
+        case categoryMappings = "categoryMappings"
+        case storeAliases = "storeAliases"
+        case timeHabits = "timeHabits"
+    }
+}
+
 struct ParseRequest: Codable {
     let messages: [ConversationMessage]
     let today: String
@@ -9,6 +24,7 @@ struct ParseRequest: Codable {
     let contacts: [String]?
     let existingTasks: [TaskContext]?
     let groceryStores: [GroceryStoreContext]?
+    let personalization: VoicePersonalization?
 }
 
 @Observable
@@ -20,8 +36,68 @@ class VoiceTaskParser {
     var errorMessage: String?
     /// Cached access token from last successful send(); passed to TTS to avoid redundant auth fetch.
     var lastAccessToken: String?
+    /// Cached voice profile for session (prefetched on mic tap, used in send).
+    private(set) var cachedProfile: VoicePersonalization?
     
-    func send(messages: [ConversationMessage], existingTasks: [TaskContext]? = nil, groceryStores: [GroceryStoreContext]? = nil) async throws -> ParseResponse {
+    /// Prefetch voice profile from Supabase. Call when mic is tapped (runs in parallel with speech).
+    /// Call with isEnabled: false when personalization is turned off.
+    func fetchVoiceProfile(isEnabled: Bool = true) async -> VoicePersonalization? {
+        guard isEnabled else {
+            cachedProfile = nil
+            return nil
+        }
+        do {
+            struct VocabEntry: Codable {
+                let spoken: String
+                let canonical: String
+            }
+            struct CategoryMappingEntry: Codable {
+                let from: String
+                let to: String
+            }
+            struct StoreAliasEntry: Codable {
+                let spoken: String
+                let canonical: String
+            }
+            struct TimeHabitEntry: Codable {
+                let category: String
+                let pattern: String
+            }
+            struct ProfileRow: Codable {
+                let vocabulary_aliases: [VocabEntry]?
+                let category_mappings: [CategoryMappingEntry]?
+                let store_aliases: [StoreAliasEntry]?
+                let time_habits: [TimeHabitEntry]?
+                let personalization_enabled: Bool?
+            }
+            let rows: [ProfileRow] = try await supabase
+                .from("user_voice_profiles")
+                .select("vocabulary_aliases, category_mappings, store_aliases, time_habits, personalization_enabled")
+                .execute()
+                .value
+            guard let row = rows.first, row.personalization_enabled != false else {
+                cachedProfile = nil
+                return nil
+            }
+            let vocab = (row.vocabulary_aliases ?? []).prefix(10).map { ["spoken": $0.spoken, "canonical": $0.canonical] }
+            let catMap = (row.category_mappings ?? []).prefix(10).map { ["from": $0.from, "to": $0.to] }
+            let store = (row.store_aliases ?? []).prefix(5).map { ["spoken": $0.spoken, "canonical": $0.canonical] }
+            let time = (row.time_habits ?? []).prefix(5).map { ["category": $0.category, "pattern": $0.pattern] }
+            let profile = VoicePersonalization(
+                vocabularyAliases: vocab.isEmpty ? nil : vocab,
+                categoryMappings: catMap.isEmpty ? nil : catMap,
+                storeAliases: store.isEmpty ? nil : store,
+                timeHabits: time.isEmpty ? nil : time
+            )
+            cachedProfile = profile
+            return profile
+        } catch {
+            cachedProfile = nil
+            return nil
+        }
+    }
+    
+    func send(messages: [ConversationMessage], existingTasks: [TaskContext]? = nil, groceryStores: [GroceryStoreContext]? = nil, personalization: VoicePersonalization? = nil) async throws -> ParseResponse {
         isProcessing = true
         errorMessage = nil
         defer { isProcessing = false }
@@ -30,6 +106,9 @@ class VoiceTaskParser {
         let today = ISO8601DateFormatter().string(from: Date()).prefix(10)
         let timezone = TimeZone.current.identifier
         
+        // Use passed personalization or cached (from prefetch)
+        let personalizationToUse = personalization ?? cachedProfile
+        
         // Build request body
         let requestBody = ParseRequest(
             messages: messages,
@@ -37,7 +116,8 @@ class VoiceTaskParser {
             timezone: timezone,
             contacts: nil,
             existingTasks: existingTasks,
-            groceryStores: groceryStores
+            groceryStores: groceryStores,
+            personalization: personalizationToUse
         )
         
         do {
@@ -54,6 +134,10 @@ class VoiceTaskParser {
                     body: requestBody
                 )
             )
+            
+            #if DEBUG
+            print("[VoiceTaskParser] Response — type: \(parseResponse.type), taskId: \(parseResponse.taskId ?? "nil"), summary: \(parseResponse.summary ?? "nil"), text: \(parseResponse.text ?? "nil"), tasks: \(parseResponse.tasks?.count ?? 0), changes: \(parseResponse.changes != nil ? "present" : "nil")")
+            #endif
             
             lastAccessToken = session.accessToken
             return parseResponse
@@ -120,6 +204,28 @@ class VoiceTaskParser {
             print("[VoiceTaskParser] Whisper error: \(error)")
             errorMessage = "Failed to transcribe audio: \(error.localizedDescription)"
             throw error
+        }
+    }
+    
+    /// Fire-and-forget: record corrections for voice personalization learning
+    func recordCorrections(_ corrections: [CorrectionEntry]) {
+        guard !corrections.isEmpty else { return }
+        _Concurrency.Task {
+            do {
+                let session = try await supabase.auth.session
+                struct RecordRequest: Codable {
+                    let corrections: [CorrectionEntry]
+                }
+                _ = try await supabase.functions.invoke(
+                    "record-corrections",
+                    options: FunctionInvokeOptions(
+                        headers: ["Authorization": "Bearer \(session.accessToken)"],
+                        body: RecordRequest(corrections: corrections)
+                    )
+                )
+            } catch {
+                print("[VoiceTaskParser] recordCorrections failed: \(error)")
+            }
         }
     }
 }

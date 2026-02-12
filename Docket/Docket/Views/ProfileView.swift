@@ -48,6 +48,10 @@ struct ProfileView: View {
     @AppStorage("useOpenAITTS") private var useOpenAITTS = true
     @AppStorage("openAITTSVoice") private var openAITTSVoice = "nova"
     @AppStorage("progressTrackingDefault") private var progressTrackingDefault = false
+    @AppStorage("personalizationEnabled") private var personalizationEnabled = true
+    
+    @State private var showResetVoiceDataConfirm = false
+    @State private var isResettingVoiceData = false
     
     init(authManager: AuthManager) {
         self.authManager = authManager
@@ -170,6 +174,28 @@ struct ProfileView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                
+                // Voice Personalization (Phase 10)
+                Toggle("Learn from my corrections", isOn: $personalizationEnabled)
+                    .onChange(of: personalizationEnabled) { _, newValue in
+                        syncPersonalizationEnabled(newValue)
+                    }
+                Text("Improves accuracy over time when you edit voice-created tasks")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                
+                Button {
+                    showResetVoiceDataConfirm = true
+                } label: {
+                    HStack {
+                        Text("Reset learned voice data")
+                        if isResettingVoiceData {
+                            Spacer()
+                            ProgressView()
+                        }
+                    }
+                }
+                .disabled(isResettingVoiceData)
             }
             
             // MARK: - Sign Out
@@ -188,6 +214,16 @@ struct ProfileView: View {
                 }
             }
             Button("Cancel", role: .cancel) { }
+        }
+        .confirmationDialog("Reset learned voice data?", isPresented: $showResetVoiceDataConfirm, titleVisibility: .visible) {
+            Button("Reset", role: .destructive) {
+                _Concurrency.Task {
+                    await resetVoiceData()
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This will clear all learned preferences. The assistant will start fresh.")
         }
         .confirmationDialog("Profile Picture", isPresented: $showAvatarOptions, titleVisibility: .visible) {
             Button("Choose Photo") {
@@ -487,6 +523,69 @@ struct ProfileView: View {
         withAnimation(.easeInOut(duration: 0.25)) {
             isEditing = false
         }
+    }
+    
+    // MARK: - Voice Personalization
+    
+    private func syncPersonalizationEnabled(_ enabled: Bool) {
+        _Concurrency.Task {
+            do {
+                let session = try await SupabaseConfig.client.auth.session
+                let uid = session.user.id.uuidString
+                struct VoiceProfileUpsert: Encodable {
+                    let user_id: String
+                    let personalization_enabled: Bool
+                    let updated_at: String
+                }
+                let now = ISO8601DateFormatter().string(from: Date())
+                try await SupabaseConfig.client
+                    .from("user_voice_profiles")
+                    .upsert(VoiceProfileUpsert(user_id: uid, personalization_enabled: enabled, updated_at: now), onConflict: "user_id")
+                    .execute()
+            } catch {
+                print("[ProfileView] syncPersonalizationEnabled failed: \(error)")
+            }
+        }
+    }
+    
+    private func resetVoiceData() async {
+        await MainActor.run { isResettingVoiceData = true }
+        do {
+            let session = try await SupabaseConfig.client.auth.session
+            let uid = session.user.id.uuidString
+            
+            try await SupabaseConfig.client
+                .from("voice_corrections")
+                .delete()
+                .eq("user_id", value: uid)
+                .execute()
+            
+            struct VoiceProfileReset: Encodable {
+                let user_id: String
+                let vocabulary_aliases: [[String: String]]
+                let category_mappings: [[String: String]]
+                let store_aliases: [[String: String]]
+                let time_habits: [[String: String]]
+                let personalization_enabled: Bool
+                let updated_at: String
+            }
+            let now = ISO8601DateFormatter().string(from: Date())
+            try await SupabaseConfig.client
+                .from("user_voice_profiles")
+                .upsert(VoiceProfileReset(
+                    user_id: uid,
+                    vocabulary_aliases: [] as [[String: String]],
+                    category_mappings: [] as [[String: String]],
+                    store_aliases: [] as [[String: String]],
+                    time_habits: [] as [[String: String]],
+                    personalization_enabled: personalizationEnabled,
+                    updated_at: now
+                ), onConflict: "user_id")
+                .execute()
+        } catch {
+            print("[ProfileView] resetVoiceData failed: \(error)")
+        }
+        await MainActor.run { isResettingVoiceData = false }
     }
     
     // MARK: - Photo Loading

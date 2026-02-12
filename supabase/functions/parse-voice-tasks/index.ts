@@ -17,6 +17,7 @@ interface ParsedTask {
   suggestion?: string;
   checklistItems?: string[]; // AI-suggested item names (ad-hoc grocery list)
   useTemplate?: string; // store name whose template to load (template-based grocery list)
+  recurrenceRule?: string; // "daily", "weekly", "monthly" — null = not recurring
 }
 
 interface TaskContext {
@@ -28,6 +29,7 @@ interface TaskContext {
   isCompleted: boolean;
   progressPercentage: number;
   isProgressEnabled: boolean;
+  recurrenceRule?: string; // "daily", "weekly", "monthly"
 }
 
 interface TaskChanges {
@@ -45,11 +47,20 @@ interface TaskChanges {
   checkChecklistItems?: string[]; // Check items (mark as done)
   uncheckChecklistItems?: string[]; // Uncheck items
   progressPercentage?: number; // "set progress on X to 75%", "update my report to 50% done"
+  isProgressEnabled?: boolean; // "switch X to progress tracking", "enable progress on X"
+  recurrenceRule?: string | null; // "daily", "weekly", "monthly" — null = turn off recurring
 }
 
 interface GroceryStoreContext {
   name: string;
   itemCount: number;
+}
+
+interface VoicePersonalization {
+  vocabularyAliases?: Array<{ spoken: string; canonical: string }>;
+  categoryMappings?: Array<{ from: string; to: string }>;
+  storeAliases?: Array<{ spoken: string; canonical: string }>;
+  timeHabits?: Array<{ category: string; pattern: string }>;
 }
 
 interface ParseRequest {
@@ -59,6 +70,7 @@ interface ParseRequest {
   contacts?: string[]; // Optional list of contact emails
   existingTasks?: TaskContext[]; // User's current tasks for context
   groceryStores?: GroceryStoreContext[]; // User's grocery store templates
+  personalization?: VoicePersonalization; // Learned preferences from corrections
 }
 
 interface ParseResponse {
@@ -85,7 +97,7 @@ Behavior:
   - "check off milk" or "mark milk as done" → checkChecklistItems: ["milk"]
   - "uncheck milk" → uncheckChecklistItems: ["milk"]
 - PINNING: "pin this task" or "pin the grocery task" → isPinned: true, "unpin it" → isPinned: false
-- PROGRESS: When the user wants to set progress on a task ("set progress on my report to 75%", "update the dentist task to 50% done", "I'm halfway through the client email"), return type "update" with changes.progressPercentage set to the number (0-100). If they say "how far along am I on X?" and the task has isProgressEnabled, include the progress in your answer from the context.
+- PROGRESS: When the user wants to set progress on a task ("set progress on my report to 75%", "update the dentist task to 50% done", "I'm halfway through the client email"), return type "update" with changes.progressPercentage set to the number (0-100). When the user wants to enable progress tracking ("switch X to progress tracking", "enable progress on X", "turn on progress for X"), return type "update" with changes.isProgressEnabled = true. If they say "how far along am I on X?" and the task has isProgressEnabled, include the progress in your answer from the context.
 - If the user asks about their tasks ("what do I have tomorrow?", "show me my tasks"), return type "question" with a helpful summary listing matching tasks from the context. When listing tasks that have isProgressEnabled, include the progress percentage (e.g., "Report is 45% done").
 - If the user wants to CREATE a new task and provides enough info, return type "complete" with structured tasks and a TTS summary.
 - If the user wants to UPDATE an existing task (mark done, change date, change priority, add notes, modify checklist, pin/unpin), return type "update" with the taskId and changes.
@@ -93,6 +105,7 @@ Behavior:
 - If critical info is missing (at minimum: a task title for creation, or which task for update/delete), return type "question" with a short follow-up question.
 - If the user says a greeting (hi, hey, hello) or something vague, return type "question" with a warm greeting back + ask what they'd like to do. Use the timezone to determine time of day: before 12pm = "Good morning!", 12-5pm = "Good afternoon!", after 5pm = "Good evening!". Example: "Good evening! What can I help you with?"
 - Keep responses natural and conversational, but concise (2-3 sentences). Use friendly phrases like "I created X for you", "I've marked Y as done", "I've deleted Z", "Done! Anything else?" to make it feel personal and helpful.
+- CLOSING QUESTION: After every update, delete, or complete response, ALWAYS end your summary with "Will this be all?" or "Anything else?" so the user can naturally continue or end the conversation. E.g. "I've updated X to 70%. Will this be all?" or "I've marked Y as done. Anything else?"
 - Be conversational but efficient. Don't ask about optional fields unless the user seems to want detail or says something vague.
 - Accept corrections naturally ("actually make it Wednesday", "never mind the note", "change priority to low").
 - When the user confirms ("yes" / "add it" / "sounds good"), finalize.
@@ -107,8 +120,8 @@ Response format — ALWAYS one of these four:
 2. Completed task(s) (new tasks):
 {"type": "complete", "tasks": [...], "summary": "TTS readback sentence"}
 
-3. Update existing task (change fields, mark done/complete, modify checklist, pin/unpin, progress, etc.):
-{"type": "update", "taskId": "uuid-of-existing-task", "changes": {"priority": "high", "dueDate": "2026-02-10", "isPinned": true, "progressPercentage": 75, "addChecklistItems": ["banana"], "starChecklistItems": ["milk"], ...}, "summary": "I've updated the task"}
+3. Update existing task (change fields, mark done/complete, modify checklist, pin/unpin, progress, recurrence, etc.):
+{"type": "update", "taskId": "uuid-of-existing-task", "changes": {"priority": "high", "dueDate": "2026-02-10", "recurrenceRule": "weekly", "isPinned": true, "progressPercentage": 75, "isProgressEnabled": true, "addChecklistItems": ["banana"], "starChecklistItems": ["milk"], ...}, "summary": "I've updated the task"}
 
 4. Mark task as done/complete (this is an UPDATE, NOT type "complete"):
 {"type": "update", "taskId": "uuid-of-existing-task", "changes": {"isCompleted": true}, "summary": "I've marked X as done"}
@@ -128,6 +141,7 @@ For each task in a "complete" response, return:
 - suggestion: Optional improvement note for the user
 - checklistItems: Array of item names (only for ad-hoc grocery lists, e.g., ["milk", "eggs", "bread"])
 - useTemplate: Store name whose template to load (only when user confirms using a template, e.g., "Costco")
+- recurrenceRule: If the user says "every day", "daily", "weekly", "every week", "every Monday", "monthly", "every month", set accordingly. Use "daily", "weekly", or "monthly". Omit or null if not recurring.
 
 Extraction rules:
 - Split compound sentences into separate tasks
@@ -217,7 +231,7 @@ Deno.serve(async (req: Request) => {
 
     // Parse request body
     const body: ParseRequest = await req.json();
-    const { messages, today, timezone, contacts, existingTasks, groceryStores } = body;
+    const { messages, today, timezone, contacts, existingTasks, groceryStores, personalization } = body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new Response(
@@ -246,7 +260,8 @@ Deno.serve(async (req: Request) => {
         const categoryStr = t.category ? ` [${t.category}]` : "";
         const statusStr = t.isCompleted ? " [completed]" : "";
         const progressStr = t.isProgressEnabled ? ` [${t.progressPercentage}% progress]` : "";
-        return `- ${t.title}${dueDateStr}${categoryStr}${progressStr}${statusStr} (id: ${t.id})`;
+        const recurStr = t.recurrenceRule ? ` [recurring: ${t.recurrenceRule}]` : "";
+        return `- ${t.title}${dueDateStr}${categoryStr}${progressStr}${recurStr}${statusStr} (id: ${t.id})`;
       }).join("\n");
       
       systemContent += `\n\nUser's existing tasks:\n${taskList}\n\nWhen the user asks to modify, complete, or delete a task, match it by title and use the task's id in your response.`;
@@ -258,6 +273,41 @@ Deno.serve(async (req: Request) => {
       }).join("\n");
       
       systemContent += `\n\nUser's grocery store templates:\n${storeList}\n\nWhen the user mentions groceries or shopping, check these stores. If they name a store, ask if they want to use the template. If they confirm, return useTemplate set to the store name.`;
+    }
+    
+    if (personalization) {
+      const lines: string[] = [];
+      const vocab = personalization.vocabularyAliases as Array<{ spoken?: string; canonical?: string }> | undefined;
+      if (vocab && vocab.length > 0) {
+        const pairs = vocab
+          .filter((v) => v?.spoken && v?.canonical)
+          .map((v) => `"${v.spoken}" means "${v.canonical}"`);
+        if (pairs.length > 0) lines.push(`- Vocabulary: ${pairs.join(", ")}`);
+      }
+      const catMap = personalization.categoryMappings as Array<{ from?: string; to?: string }> | undefined;
+      if (catMap && catMap.length > 0) {
+        const pairs = catMap
+          .filter((c) => c?.from && c?.to)
+          .map((c) => `"${c.from}" → "${c.to}"`);
+        if (pairs.length > 0) lines.push(`- Categories: User prefers ${pairs.join(", ")}`);
+      }
+      const stores = personalization.storeAliases as Array<{ spoken?: string; canonical?: string }> | undefined;
+      if (stores && stores.length > 0) {
+        const pairs = stores
+          .filter((s) => s?.spoken && s?.canonical)
+          .map((s) => `"${s.spoken}" means "${s.canonical}"`);
+        if (pairs.length > 0) lines.push(`- Stores: ${pairs.join(", ")}`);
+      }
+      const habits = personalization.timeHabits as Array<{ category?: string; pattern?: string }> | undefined;
+      if (habits && habits.length > 0) {
+        const habStrs = habits
+          .filter((t) => t?.category && t?.pattern)
+          .map((t) => `${t.category} tasks: ${t.pattern === "usually_has_time" ? "usually include a specific time" : "usually date-only"}`);
+        if (habStrs.length > 0) lines.push(`- Time habits: ${habStrs.join("; ")}`);
+      }
+      if (lines.length > 0) {
+        systemContent += `\n\nUSER PREFERENCES (learned from past corrections):\n${lines.join("\n")}\nApply these preferences when parsing. Do not mention them to the user.`;
+      }
     }
     
     // Build chat completion request

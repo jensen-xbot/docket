@@ -356,6 +356,7 @@ For each task in a "complete" response, return:
 - notes: Additional context/details from the user, or null
 - shareWith: Email or display name to share with, or null
 - suggestion: Optional improvement note for the user
+- recurrenceRule: If user says "every day", "weekly", "every Monday", "monthly", set to "daily", "weekly", or "monthly". Omit if not recurring.
 
 Extraction rules:
 - Split compound sentences into separate tasks
@@ -536,6 +537,7 @@ struct ParsedTask: Codable, Identifiable {
     var suggestion: String?
     var checklistItems: [String]?  // AI-suggested item names (ad-hoc grocery list)
     var useTemplate: String?       // store name whose template to load
+    var recurrenceRule: String?    // "daily", "weekly", "monthly" — nil = not recurring
 }
 
 struct ConversationMessage: Codable {
@@ -568,6 +570,7 @@ struct TaskChanges: Codable {
     var category: String?
     var notes: String?
     var isCompleted: Bool?
+    var recurrenceRule: String?  // "daily", "weekly", "monthly" — nil = turn off recurring
 }
 ```
 

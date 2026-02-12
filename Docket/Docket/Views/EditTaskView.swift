@@ -33,6 +33,11 @@ struct EditTaskView: View {
     
     @State private var storeStore = StoreStore()
     @State private var modeSwitchRotation: Double = 0
+    @State private var isRecurring: Bool = false
+    @State private var recurrenceRule: String = "weekly"
+    @AppStorage("personalizationEnabled") private var personalizationEnabled = true
+    
+    private var categoryStore: CategoryStore { CategoryStore.shared }
     
     private var isValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -46,65 +51,56 @@ struct EditTaskView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    // MARK: 1. Category & Store
+                    // MARK: 1. Title
+                    TextField("Task title", text: $title, axis: .vertical)
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .focused($titleFocused)
+                        .padding(.top, 8)
+                    
+                    Spacer().frame(height: 4)
+                    
+                    // MARK: 2. Category & Store
                     categorySection
                     
-                    // MARK: 2. Title
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Title")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        TextField("Task title", text: $title, axis: .vertical)
-                            .font(.title3)
-                            .fontDesign(.rounded)
-                            .focused($titleFocused)
-                    }
-                    
-                    Divider()
-                    
-                    // MARK: 3. Progress + Completed section (under title)
-                    progressAndCompletedSection
-                    
-                    Divider()
-                    
-                    // MARK: 4. Checklist
+                    // MARK: 3. Checklist
                     if isChecklistCategory || !checklistItems.isEmpty {
                         ChecklistEditorView(
                             items: $checklistItems,
                             onSaveTemplate: { promptSaveTemplate() },
                             autoFocusAdd: false
                         )
-                        Divider()
                     }
                     
-                    // MARK: 5. Priority
+                    // MARK: 4. Priority
+                    prioritySection
+                    
+                    Divider()
+                    
+                    // MARK: 5. Track Progress / Mark Complete
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Priority")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Picker("Priority", selection: $priority) {
-                            ForEach(Priority.allCases, id: \.self) { p in
-                                Text(p.displayName).tag(p)
-                            }
+                        if task.isProgressEnabled {
+                            Text("Track Progress")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
                         }
-                        .pickerStyle(.segmented)
+                        progressAndCompletedSection
                     }
                     
                     Divider()
                     
-                    // MARK: 6. Due Date (SF Symbol tap)
-                    dueDateSection
-                    
-                    Divider()
-                    
-                    // MARK: 7. Notes
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Notes")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        TextField("Add any extra details...", text: $notes, axis: .vertical)
-                            .lineLimit(3...8)
-                            .focused($notesFocused)
+                    // MARK: 6. Due Date + Notes (tighter spacing between calendar and notes)
+                    VStack(alignment: .leading, spacing: 12) {
+                        dueDateSection
+                        Divider()
+                        // MARK: 7. Notes
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Notes")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            TextField("Add any extra details...", text: $notes, axis: .vertical)
+                                .lineLimit(3...8)
+                                .focused($notesFocused)
+                        }
                     }
                     
                     Divider()
@@ -166,106 +162,246 @@ struct EditTaskView: View {
                 category = task.category ?? ""
                 notes = task.notes ?? ""
                 checklistItems = task.checklistItems ?? []
+                isRecurring = task.recurrenceRule != nil
+                recurrenceRule = task.recurrenceRule ?? "weekly"
                 parseStoreFromTitle()
             }
         }
     }
     
-    // MARK: - Category Section
+    // MARK: - Category Section (inline chip expansion)
     private var categorySection: some View {
-        Group {
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isEditingCategory.toggle()
-                }
-            } label: {
-                HStack {
-                    if !category.isEmpty {
-                        Label {
-                            HStack(spacing: 4) {
-                                Text(category)
-                                if !selectedStore.isEmpty {
-                                    Text("·")
-                                        .foregroundStyle(.secondary)
-                                    Text(selectedStore)
+        VStack(alignment: .leading, spacing: 10) {
+            // Category row: selected chip + other chips expand inline
+            FlowLayout(spacing: 8) {
+                ForEach(categoryStore.categories) { item in
+                    let isSelected = category == item.name
+                    let chipColor = Color(hex: item.color) ?? .gray
+                    
+                    // Show selected chip always; show others only when editing
+                    if isSelected || isEditingCategory {
+                        HStack(spacing: 6) {
+                            Image(systemName: item.icon)
+                                .font(.caption2)
+                                .foregroundStyle(isSelected ? .white : chipColor)
+                            Text(item.name)
+                                .font(.subheadline)
+                                .foregroundStyle(isSelected ? .white : .primary)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(isSelected ? chipColor : Color(.systemBackground))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(chipColor, lineWidth: isSelected ? 0 : 1.5)
+                        )
+                        .cornerRadius(16)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                if isSelected {
+                                    // Tap selected chip: toggle expand/collapse
+                                    isEditingCategory.toggle()
+                                } else {
+                                    // Tap another chip: select it, collapse
+                                    category = item.name
+                                    updateTitleForCategory()
+                                    isEditingCategory = false
                                 }
                             }
-                        } icon: {
-                            Image(systemName: "tag.fill")
-                                .foregroundStyle(.green)
                         }
-                        .font(.subheadline)
-                    } else {
-                        Text("No category")
+                        .transition(.scale.combined(with: .opacity))
+                    }
+                }
+                
+                // "No category" chip when nothing selected
+                if category.isEmpty {
+                    HStack(spacing: 6) {
+                        Image(systemName: "tag")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text("Category")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
-                    
-                    Spacer()
-                    
-                    Image(systemName: isEditingCategory ? "chevron.up" : "chevron.down")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .buttonStyle(.plain)
-            .contentShape(Rectangle())
-            
-            if isEditingCategory {
-                CategoryPickerView(selectedCategory: $category)
-                    .onChange(of: category) {
-                        updateTitleForCategory()
-                    }
-                
-                if isChecklistCategory {
-                    StorePickerView(
-                        selectedStore: $selectedStore,
-                        onStoreChanged: { updateGroceryTitle() }
-                    )
-                    
-                    if !availableTemplates.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Load a Template")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            FlowLayout(spacing: 8) {
-                                ForEach(availableTemplates) { template in
-                                    Button {
-                                        loadTemplate(template)
-                                    } label: {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "doc.on.doc")
-                                                .font(.caption2)
-                                            Text("\(template.name) (\(template.items.count))")
-                                                .font(.subheadline)
-                                        }
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(loadedTemplateName == template.name ? Color.green.opacity(0.2) : Color(.systemGray6))
-                                        .foregroundStyle(loadedTemplateName == template.name ? .green : .primary)
-                                        .cornerRadius(16)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 16)
-                                                .stroke(loadedTemplateName == template.name ? Color.green.opacity(0.5) : Color.clear, lineWidth: 1)
-                                        )
-                                    }
-                                }
-                            }
-                            
-                            if let loaded = loadedTemplateName {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.caption2)
-                                        .foregroundStyle(.green)
-                                    Text("Loaded: \(loaded)")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(16)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                            isEditingCategory.toggle()
                         }
                     }
                 }
             }
+            .animation(.spring(response: 0.3, dampingFraction: 0.85), value: isEditingCategory)
+            .animation(.spring(response: 0.3, dampingFraction: 0.85), value: category)
+            
+            // Store row: same inline pattern for checklist categories
+            if isChecklistCategory {
+                storeRow
+                
+                // Template row
+                if !availableTemplates.isEmpty {
+                    templateRow
+                }
+            }
+        }
+    }
+    
+    // MARK: - Store Row (inline chip expansion)
+    @State private var isEditingStore = false
+    
+    private var storeRow: some View {
+        FlowLayout(spacing: 8) {
+            ForEach(storeStore.stores, id: \.self) { store in
+                let isSelected = selectedStore == store
+                
+                if isSelected || isEditingStore {
+                    Text(store)
+                        .font(.subheadline)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .foregroundStyle(isSelected ? .white : .primary)
+                        .background(isSelected ? Color.orange : Color(.systemBackground))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(isSelected ? Color.clear : Color(.systemGray4), lineWidth: 1.5)
+                        )
+                        .cornerRadius(16)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                if isSelected {
+                                    isEditingStore.toggle()
+                                } else {
+                                    selectedStore = store
+                                    updateGroceryTitle()
+                                    isEditingStore = false
+                                }
+                            }
+                        }
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            
+            if selectedStore.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "building.2")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text("Store")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(.systemGray6))
+                .cornerRadius(16)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        isEditingStore.toggle()
+                    }
+                }
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: isEditingStore)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: selectedStore)
+    }
+    
+    // MARK: - Template Row (inline chip expansion)
+    @State private var isEditingTemplate = false
+    
+    private var templateRow: some View {
+        FlowLayout(spacing: 8) {
+            ForEach(availableTemplates) { template in
+                let isSelected = loadedTemplateName == template.name
+                
+                if isSelected || isEditingTemplate {
+                    HStack(spacing: 4) {
+                        Image(systemName: "doc.on.doc")
+                            .font(.caption2)
+                        Text(template.name)
+                            .font(.subheadline)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .foregroundStyle(isSelected ? .white : .primary)
+                    .background(isSelected ? Color.green : Color(.systemBackground))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(isSelected ? Color.clear : Color.green.opacity(0.5), lineWidth: 1.5)
+                        )
+                    .cornerRadius(16)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                            if isSelected {
+                                isEditingTemplate.toggle()
+                            } else {
+                                loadTemplate(template)
+                                isEditingTemplate = false
+                            }
+                        }
+                    }
+                    .transition(.scale.combined(with: .opacity))
+                }
+            }
+            
+            if loadedTemplateName == nil {
+                HStack(spacing: 6) {
+                    Image(systemName: "doc.on.doc")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text("Template")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(.systemGray6))
+                .cornerRadius(16)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        isEditingTemplate.toggle()
+                    }
+                }
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: isEditingTemplate)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: loadedTemplateName)
+    }
+    
+    // MARK: - Priority Section (segmented picker with colored contour)
+    private var prioritySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Priority")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Picker("Priority", selection: $priority) {
+                ForEach(Priority.allCases, id: \.self) { p in
+                    Text(p.displayName).tag(p)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(3)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(priorityContourColor, lineWidth: 2.5)
+            )
+            .animation(.easeInOut(duration: 0.2), value: priority)
+        }
+    }
+    
+    private var priorityContourColor: Color {
+        switch priority {
+        case .low: return .green
+        case .medium: return .yellow
+        case .high: return .red
         }
     }
     
@@ -350,7 +486,7 @@ struct EditTaskView: View {
             ZStack {
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .font(.system(size: 28, weight: .light))
-                    .foregroundStyle(task.isProgressEnabled ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+                    .foregroundStyle(Color.gray.opacity(0.3))
                 
                 // Percentage inside the arrows when in Track mode
                 if task.isProgressEnabled {
@@ -375,7 +511,10 @@ struct EditTaskView: View {
                 Button {
                     withAnimation(.easeInOut(duration: 0.25)) {
                         hasDueDate.toggle()
-                        if !hasDueDate { hasTime = false }
+                        if !hasDueDate {
+                            hasTime = false
+                            isRecurring = false
+                        }
                     }
                 } label: {
                     HStack(spacing: 10) {
@@ -396,6 +535,33 @@ struct EditTaskView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                
+                // Recurring: appears when calendar is open, between Calendar and Set Time
+                if hasDueDate {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            isRecurring.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "repeat")
+                                .font(.title2)
+                                .foregroundStyle(isRecurring ? .blue : .secondary)
+                                .symbolEffect(.bounce, value: isRecurring)
+                            if !hasTime {
+                                Text("Recurring")
+                                    .font(.body)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(isRecurring ? .blue : .primary)
+                                    .transition(.opacity.combined(with: .move(edge: .leading)))
+                            }
+                        }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .transition(.opacity.combined(with: .move(edge: .leading)))
+                }
                 
                 // Clock + Set Time: appears when calendar is open
                 if hasDueDate {
@@ -434,6 +600,17 @@ struct EditTaskView: View {
                 DatePicker("", selection: $dueDate, displayedComponents: [.date])
                     .datePickerStyle(.graphical)
                     .transition(.opacity.combined(with: .move(edge: .leading)))
+                
+                // Recurrence rule picker when recurring is active
+                if isRecurring {
+                    Picker("Recurrence", selection: $recurrenceRule) {
+                        Text("Daily").tag("daily")
+                        Text("Weekly").tag("weekly")
+                        Text("Monthly").tag("monthly")
+                    }
+                    .pickerStyle(.segmented)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
         }
     }
@@ -450,17 +627,81 @@ struct EditTaskView: View {
         task.priority = priority
         task.dueDate = hasDueDate ? (hasTime ? combineDateAndTime(date: dueDate, time: dueTime) : dueDate) : nil
         task.hasTime = hasTime
+        task.recurrenceRule = hasDueDate && isRecurring ? recurrenceRule : nil
         task.category = category.isEmpty ? nil : category
         task.notes = notes.isEmpty ? nil : notes
         task.checklistItems = checklistItems.isEmpty ? nil : checklistItems
         task.completedAt = task.isCompleted ? (task.completedAt ?? Date()) : nil
         task.updatedAt = Date()
         task.syncStatus = SyncStatus.pending.rawValue
+        
+        // Voice personalization: detect corrections and send fire-and-forget
+        if personalizationEnabled, task.taskSource == "voice", let snapshotData = task.voiceSnapshotData,
+           let snapshot = try? JSONDecoder().decode(VoiceSnapshot.self, from: snapshotData) {
+            let corrections = collectCorrections(snapshot: snapshot)
+            if !corrections.isEmpty {
+                VoiceTaskParser().recordCorrections(corrections)
+            }
+        }
+        
         _Concurrency.Task {
             await NotificationManager.shared.scheduleNotification(for: task)
             await syncEngine.pushTask(task)
         }
         dismiss()
+    }
+    
+    private func collectCorrections(snapshot: VoiceSnapshot) -> [CorrectionEntry] {
+        var corrections: [CorrectionEntry] = []
+        let taskIdStr = task.id.uuidString
+        
+        let editedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if editedTitle != snapshot.title {
+            corrections.append(CorrectionEntry(taskId: taskIdStr, fieldName: "title", originalValue: snapshot.title, correctedValue: editedTitle, category: nil))
+        }
+        
+        let editedCategory = category.isEmpty ? nil : category
+        let snapCategory = snapshot.category
+        if editedCategory != snapCategory {
+            corrections.append(CorrectionEntry(taskId: taskIdStr, fieldName: "category", originalValue: snapCategory, correctedValue: editedCategory, category: nil))
+        }
+        
+        let editedPriority = priority.displayName.lowercased()
+        if editedPriority != snapshot.priority.lowercased() {
+            corrections.append(CorrectionEntry(taskId: taskIdStr, fieldName: "priority", originalValue: snapshot.priority, correctedValue: editedPriority, category: nil))
+        }
+        
+        let editedDueDateStr: String?
+        if hasDueDate {
+            let d = hasTime ? combineDateAndTime(date: dueDate, time: dueTime) : dueDate
+            if hasTime {
+                let f = DateFormatter()
+                f.dateFormat = "yyyy-MM-dd'T'HH:mm"
+                f.timeZone = TimeZone.current
+                editedDueDateStr = f.string(from: d)
+            } else {
+                let f = ISO8601DateFormatter()
+                f.formatOptions = [.withFullDate, .withDashSeparatorInDate]
+                f.timeZone = TimeZone.current
+                editedDueDateStr = String(f.string(from: d).prefix(10))
+            }
+        } else {
+            editedDueDateStr = nil
+        }
+        if editedDueDateStr != snapshot.dueDate {
+            corrections.append(CorrectionEntry(taskId: taskIdStr, fieldName: "dueDate", originalValue: snapshot.dueDate, correctedValue: editedDueDateStr, category: nil))
+        }
+        
+        if hasTime != snapshot.hasTime {
+            corrections.append(CorrectionEntry(taskId: taskIdStr, fieldName: "hasTime", originalValue: String(snapshot.hasTime), correctedValue: String(hasTime), category: task.category))
+        }
+        
+        let editedNotes = notes.isEmpty ? nil : notes
+        if editedNotes != snapshot.notes {
+            corrections.append(CorrectionEntry(taskId: taskIdStr, fieldName: "notes", originalValue: snapshot.notes, correctedValue: editedNotes, category: nil))
+        }
+        
+        return corrections
     }
     
     private func deleteTask() {

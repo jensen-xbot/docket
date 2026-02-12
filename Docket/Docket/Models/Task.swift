@@ -1,6 +1,16 @@
 import Foundation
 import SwiftData
 
+/// Snapshot of AI output at voice task creation time (for correction tracking)
+struct VoiceSnapshot: Codable {
+    let title: String
+    let dueDate: String? // ISO 8601
+    let hasTime: Bool
+    let priority: String
+    let category: String?
+    let notes: String?
+}
+
 enum SyncStatus: Int, Codable {
     case synced = 0
     case pending = 1
@@ -31,6 +41,13 @@ class Task {
     var progressPercentage: Double = 0.0 // 0.0 - 100.0
     var isProgressEnabled: Bool = false // per-task toggle
     var lastProgressUpdate: Date?
+    
+    // Recurring (nil = not recurring, "daily"|"weekly"|"monthly")
+    var recurrenceRule: String?
+    
+    // Voice personalization (Phase 10)
+    var taskSource: String? // "voice" or nil (manual/legacy)
+    var voiceSnapshotData: Data? // encoded VoiceSnapshot at creation time
     
     var checklistItems: [ChecklistItem]? {
         get {
@@ -66,7 +83,10 @@ class Task {
         updatedAt: Date = Date(),
         progressPercentage: Double = 0.0,
         isProgressEnabled: Bool = false,
-        lastProgressUpdate: Date? = nil
+        lastProgressUpdate: Date? = nil,
+        recurrenceRule: String? = nil,
+        taskSource: String? = nil,
+        voiceSnapshotData: Data? = nil
     ) {
         self.id = id
         self.userId = userId
@@ -92,6 +112,9 @@ class Task {
         self.progressPercentage = progressPercentage
         self.isProgressEnabled = isProgressEnabled
         self.lastProgressUpdate = lastProgressUpdate
+        self.recurrenceRule = recurrenceRule
+        self.taskSource = taskSource
+        self.voiceSnapshotData = voiceSnapshotData
     }
     
     var syncStatusEnum: SyncStatus {
@@ -132,6 +155,9 @@ struct TaskDTO: Codable {
     var progressPercentage: Double
     var isProgressEnabled: Bool
     var lastProgressUpdate: Date?
+    var recurrenceRule: String?
+    var taskSource: String?
+    var voiceSnapshot: VoiceSnapshot?
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -152,6 +178,9 @@ struct TaskDTO: Codable {
         case progressPercentage = "progress_percentage"
         case isProgressEnabled = "is_progress_enabled"
         case lastProgressUpdate = "last_progress_update"
+        case recurrenceRule = "recurrence_rule"
+        case taskSource = "task_source"
+        case voiceSnapshot = "voice_snapshot"
     }
     
     init(from decoder: Decoder) throws {
@@ -174,6 +203,9 @@ struct TaskDTO: Codable {
         progressPercentage = try container.decodeIfPresent(Double.self, forKey: .progressPercentage) ?? 0.0
         isProgressEnabled = try container.decodeIfPresent(Bool.self, forKey: .isProgressEnabled) ?? false
         lastProgressUpdate = try container.decodeIfPresent(Date.self, forKey: .lastProgressUpdate)
+        recurrenceRule = try container.decodeIfPresent(String.self, forKey: .recurrenceRule)
+        taskSource = try container.decodeIfPresent(String.self, forKey: .taskSource)
+        voiceSnapshot = try container.decodeIfPresent(VoiceSnapshot.self, forKey: .voiceSnapshot)
     }
     
     func encode(to encoder: Encoder) throws {
@@ -196,6 +228,9 @@ struct TaskDTO: Codable {
         try container.encode(progressPercentage, forKey: .progressPercentage)
         try container.encode(isProgressEnabled, forKey: .isProgressEnabled)
         try container.encodeIfPresent(lastProgressUpdate, forKey: .lastProgressUpdate)
+        try container.encodeIfPresent(recurrenceRule, forKey: .recurrenceRule)
+        try container.encodeIfPresent(taskSource, forKey: .taskSource)
+        try container.encodeIfPresent(voiceSnapshot, forKey: .voiceSnapshot)
     }
     
     init(from task: Task, userId: String) {
@@ -217,6 +252,9 @@ struct TaskDTO: Codable {
         self.progressPercentage = task.progressPercentage
         self.isProgressEnabled = task.isProgressEnabled
         self.lastProgressUpdate = task.lastProgressUpdate
+        self.recurrenceRule = task.recurrenceRule
+        self.taskSource = task.taskSource
+        self.voiceSnapshot = task.voiceSnapshotData.flatMap { try? JSONDecoder().decode(VoiceSnapshot.self, from: $0) }
     }
     
     func toTask() -> Task {
@@ -247,7 +285,10 @@ struct TaskDTO: Codable {
             updatedAt: updatedAt,
             progressPercentage: progressPercentage,
             isProgressEnabled: isProgressEnabled,
-            lastProgressUpdate: lastProgressUpdate
+            lastProgressUpdate: lastProgressUpdate,
+            recurrenceRule: recurrenceRule,
+            taskSource: taskSource,
+            voiceSnapshotData: voiceSnapshot.flatMap { try? JSONEncoder().encode($0) }
         )
     }
 }

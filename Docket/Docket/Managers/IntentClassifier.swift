@@ -31,9 +31,15 @@ struct IntentClassifier {
         }
         
         // 2. Closing flow: short replies = dismiss, long = new task
+        // Exclude self-corrections (e.g. "oh sorry", "wait") — user is mid-sentence, not closing
+        // Long responses (>5 words) are always new task requests (e.g. "No I'd like to change X to 90%")
         if context.isInClosingFlow {
             let wordCount = text.split(separator: " ").count
-            if isDismissal(text) || wordCount <= Self.closingFlowWordThreshold {
+            if wordCount > Self.closingFlowWordThreshold {
+                return .taskRequest
+            }
+            let isSelfCorrection = isSelfCorrectionPhrase(text)
+            if isDismissal(text) || !isSelfCorrection {
                 return .dismiss
             }
             return .taskRequest
@@ -93,5 +99,14 @@ struct IntentClassifier {
             "appreciate it", "much appreciated"
         ]
         return matchesPhrase(text, phrases: gratitude)
+    }
+    
+    /// Phrases that indicate the user is mid-sentence self-correcting, not closing the session.
+    private func isSelfCorrectionPhrase(_ text: String) -> Bool {
+        let phrases = [
+            "oh sorry", "sorry", "wait", "actually", "hold on",
+            "i mean", "no wait", "correction"
+        ]
+        return matchesPhrase(text, phrases: phrases)
     }
 }

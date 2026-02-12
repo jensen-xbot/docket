@@ -5,7 +5,7 @@
 
 ---
 
-## 1. Recurring Tasks (Simple Implementation)
+## 1. Recurring Tasks (Simple Implementation) — IMPLEMENTED (Feb 2026)
 
 ### Placement
 - **Location:** Inside task edit view, near Calendar/Time settings

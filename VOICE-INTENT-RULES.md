@@ -42,14 +42,20 @@ The assistant has asked "Anything else?" or "Will this be all?" — the conversa
 - "Updated! Anything else?"
 - "Got it. Anything else?"
 - "You're welcome. Will this be all?"
+- After update/delete: "I've updated X to 70%. Will this be all?" (or AI summary + client-appended "Will this be all?")
 
 | User says | Intent | Action |
 |---|---|---|
+| Long response (>5 words) | New task | Reset `isInClosingFlow`, send to parser |
 | Explicit dismissal (see list below) | Dismiss | Close voice view |
-| Short response (≤5 words) that isn't a dismissal | Dismiss | Close voice view (assumed affirmative) |
-| Longer response (>5 words) | New task | Reset `isInClosingFlow`, send to parser |
+| Short response (≤5 words) that isn't a dismissal or self-correction | Dismiss | Close voice view (assumed affirmative) |
+| Self-correction phrase (e.g. "oh sorry", "wait") | New task | Send to parser (user mid-sentence) |
+
+**Word count is checked first.** Long responses (>5 words) are always treated as new task requests, even if they start with "no" (e.g. "No I'd like to change the Lucky Martin GB to 90%"). This prevents the window from closing when the user answers "No" to "Will this be all?" and then continues with another request.
 
 **Why ≤5 words?** After "Anything else?" or "Will this be all?", short replies are almost always session-closing ("yes", "nope", "I'm good", "yes thank you", "that's all thanks"). A genuine new task request will be longer ("actually add a meeting with Sarah tomorrow at 3pm"). The 5-word threshold catches all common closing phrases without needing an exhaustive phrase list.
+
+**Self-correction exclusion:** If the user says "oh sorry", "wait", "actually", "hold on", etc. (especially after a pause mid-sentence), we treat it as a new task request — they're correcting themselves, not closing. This prevents the window from closing when silence detection fires during a self-correction.
 
 ### 4. Gratitude Shortcut
 When the user says "thank you" (and no tasks are pending), we don't send it to the parser. Instead, we respond warmly and ask if they need anything else.
@@ -88,6 +94,14 @@ nothing, all done, all good,
 bye, goodbye, see you, talk to you later
 ```
 
+### Self-corrections (`isSelfCorrectionPhrase`)
+Excluded from closing-flow short-reply dismiss. User is mid-sentence correcting, not closing.
+
+```
+oh sorry, sorry, wait, actually, hold on,
+i mean, no wait, correction
+```
+
 ### Gratitude (`isGratitude`)
 Triggers the warm acknowledgment + "Will this be all?" flow.
 
@@ -120,9 +134,10 @@ The order of intent checks matters. `IntentClassifier` evaluates in this sequenc
    b. Rejection phrase? → .reject
    c. Other → .taskRequest (correction)
 2. isInClosingFlow?
-   a. Explicit dismissal? → .dismiss
-   b. ≤5 words? → .dismiss (assumed affirmative closing)
-   c. >5 words → .taskRequest (new task)
+   a. >5 words? → .taskRequest (long reply = new task, e.g. "No I'd like to change X to 90%")
+   b. Explicit dismissal? → .dismiss
+   c. Self-correction? → .taskRequest
+   d. ≤5 words (short, not dismissal) → .dismiss (assumed affirmative closing)
 3. Explicit dismissal? → .dismiss
 4. Gratitude? → .gratitude
 5. Default → .taskRequest

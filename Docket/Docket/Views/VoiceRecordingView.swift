@@ -26,6 +26,7 @@ struct VoiceRecordingView: View {
     @Environment(SyncEngine.self) private var syncEngine
     @Environment(NetworkMonitor.self) private var networkMonitor
     @Query(filter: #Predicate<Task> { !$0.isCompleted }, sort: \Task.createdAt, order: .reverse) private var activeTasks: [Task]
+    @Query(filter: #Predicate<Task> { $0.isCompleted }, sort: \Task.completedAt, order: .reverse) private var completedTasks: [Task]
     @Query(sort: \GroceryStore.name) private var groceryStores: [GroceryStore]
     @State private var speechManager = SpeechRecognitionManager()
     @State private var ttsManager = TTSManager()
@@ -41,6 +42,7 @@ struct VoiceRecordingView: View {
     @State private var isInClosingFlow = false // true after "Anything else?" or "Will this be all?"
     @AppStorage("useWhisperTranscription") private var useWhisperTranscription = false
     @AppStorage("progressTrackingDefault") private var progressTrackingDefault = false
+    @AppStorage("personalizationEnabled") private var personalizationEnabled = true
     private let conversationTimeoutSeconds: TimeInterval = 60
     private let appStoreURL = "https://apps.apple.com/app/docket/id0000000000"
 
@@ -344,6 +346,10 @@ struct VoiceRecordingView: View {
         // Start conversation timeout
         startConversationTimeout()
         
+        // Prefetch voice profile in parallel (zero-latency: runs while user speaks)
+        _Concurrency.Task {
+            await parser.fetchVoiceProfile(isEnabled: personalizationEnabled)
+        }
         await speechManager.startRecording()
     }
     
@@ -481,9 +487,11 @@ struct VoiceRecordingView: View {
         }
     }
     
-    /// Builds TaskContext array from active tasks (capped at 50 for context window)
+    /// Builds TaskContext array from active + recent completed tasks (capped for context window)
     private func buildTaskContext() -> [TaskContext] {
-        let tasksToSend = Array(activeTasks.prefix(50))
+        let active = Array(activeTasks.prefix(50))
+        let recentCompleted = Array(completedTasks.prefix(20))
+        let tasksToSend = active + recentCompleted
         
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
@@ -521,7 +529,8 @@ struct VoiceRecordingView: View {
                 category: task.category,
                 isCompleted: task.isCompleted,
                 progressPercentage: task.progressPercentage,
-                isProgressEnabled: task.isProgressEnabled
+                isProgressEnabled: task.isProgressEnabled,
+                recurrenceRule: task.recurrenceRule
             )
         }
     }
@@ -715,8 +724,11 @@ struct VoiceRecordingView: View {
                     category: parsedTask.category,
                     notes: parsedTask.notes,
                     syncStatus: .pending,
-                    isProgressEnabled: progressTrackingDefault
+                    isProgressEnabled: progressTrackingDefault,
+                    recurrenceRule: parsedTask.recurrenceRule
                 )
+                task.taskSource = "voice"
+                task.voiceSnapshotData = try? JSONEncoder().encode(parsedTask.toVoiceSnapshot())
                 
                 // Handle checklist items
                 if let templateName = parsedTask.useTemplate {
@@ -824,6 +836,7 @@ struct VoiceRecordingView: View {
                     existingTask.priority = priority
                     existingTask.category = correctedTask.category
                     existingTask.notes = correctedTask.notes
+                    existingTask.recurrenceRule = correctedTask.recurrenceRule
                     existingTask.syncStatusEnum = .pending
                     existingTask.updatedAt = Date()
                     
@@ -844,8 +857,11 @@ struct VoiceRecordingView: View {
                         priority: priority,
                         category: correctedTask.category,
                         notes: correctedTask.notes,
-                        syncStatus: .pending
+                        syncStatus: .pending,
+                        recurrenceRule: correctedTask.recurrenceRule
                     )
+                    task.taskSource = "voice"
+                    task.voiceSnapshotData = try? JSONEncoder().encode(correctedTask.toVoiceSnapshot())
                     modelContext.insert(task)
                     lastSavedTasks.append(task)
                     
@@ -1006,8 +1022,11 @@ struct VoiceRecordingView: View {
                     category: parsedTask.category,
                     notes: parsedTask.notes,
                     syncStatus: .pending,
-                    isProgressEnabled: progressTrackingDefault
+                    isProgressEnabled: progressTrackingDefault,
+                    recurrenceRule: parsedTask.recurrenceRule
                 )
+                task.taskSource = "voice"
+                task.voiceSnapshotData = try? JSONEncoder().encode(parsedTask.toVoiceSnapshot())
                 if let templateName = parsedTask.useTemplate,
                    let store = groceryStores.first(where: { $0.name.localizedCaseInsensitiveContains(templateName) }) {
                     task.checklistItems = store.items.enumerated().map { index, name in
@@ -1142,9 +1161,18 @@ struct VoiceRecordingView: View {
         guard let taskIdString = response.taskId,
               let taskId = UUID(uuidString: taskIdString),
               let changes = response.changes else {
-            print("[Voice] update response missing taskId or changes")
-            await speakError("I couldn't find which task to update. Try again?")
-            state = .idle
+            print("[Voice] update response missing taskId or changes — taskId: \(response.taskId ?? "nil"), changes: \(response.changes != nil ? "present" : "nil")")
+            // Graceful fallback: if the AI returned a summary or text, speak it as a question
+            // (e.g., "Which task did you mean?" or partial response)
+            let fallbackText = response.summary ?? response.text ?? "I couldn't figure out which task to update. Could you try again?"
+            ttsManager.speakWithBoundedSync(text: fallbackText, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
+                messages.append(ConversationMessage(role: "assistant", content: fallbackText))
+                state = .speaking
+            }, onFinish: { [self] in
+                startConversationTimeout()
+                state = .listening
+                _Concurrency.Task { await speechManager.startRecording() }
+            })
             return
         }
         
@@ -1210,6 +1238,14 @@ struct VoiceRecordingView: View {
                 task.isCompleted = true
                 task.completedAt = Date()
             }
+        }
+        
+        if let progressEnabled = changes.isProgressEnabled {
+            task.isProgressEnabled = progressEnabled
+        }
+        
+        if changes.recurrenceRule != nil {
+            task.recurrenceRule = changes.recurrenceRule
         }
         
         // Handle checklist operations
@@ -1325,10 +1361,12 @@ struct VoiceRecordingView: View {
         generator.prepare()
         generator.notificationOccurred(.success)
         
-        // TTS readback
+        // TTS readback — append "Will this be all?" if summary doesn't already end with a question
         if let summary = response.summary {
-            ttsManager.speakWithBoundedSync(text: summary, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
-                messages.append(ConversationMessage(role: "assistant", content: summary))
+            let summaryToSpeak = summary.hasSuffix("?") ? summary : summary + " Will this be all?"
+            isInClosingFlow = true
+            ttsManager.speakWithBoundedSync(text: summaryToSpeak, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
+                messages.append(ConversationMessage(role: "assistant", content: summaryToSpeak))
                 state = .speaking
             }, onFinish: { [self] in
                 startConversationTimeout()
@@ -1348,9 +1386,17 @@ struct VoiceRecordingView: View {
         
         guard let taskIdString = response.taskId,
               let taskId = UUID(uuidString: taskIdString) else {
-            print("[Voice] delete response missing taskId")
-            await speakError("I couldn't find which task to delete. Try again?")
-            state = .idle
+            print("[Voice] delete response missing taskId — taskId: \(response.taskId ?? "nil")")
+            // Graceful fallback: speak the AI's text instead of a generic error
+            let fallbackText = response.summary ?? response.text ?? "I couldn't figure out which task to delete. Could you try again?"
+            ttsManager.speakWithBoundedSync(text: fallbackText, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
+                messages.append(ConversationMessage(role: "assistant", content: fallbackText))
+                state = .speaking
+            }, onFinish: { [self] in
+                startConversationTimeout()
+                state = .listening
+                _Concurrency.Task { await speechManager.startRecording() }
+            })
             return
         }
         
@@ -1380,10 +1426,12 @@ struct VoiceRecordingView: View {
         generator.prepare()
         generator.notificationOccurred(.success)
         
-        // TTS readback
+        // TTS readback — append "Will this be all?" if summary doesn't already end with a question
         if let summary = response.summary {
-            ttsManager.speakWithBoundedSync(text: summary, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
-                messages.append(ConversationMessage(role: "assistant", content: summary))
+            let summaryToSpeak = summary.hasSuffix("?") ? summary : summary + " Will this be all?"
+            isInClosingFlow = true
+            ttsManager.speakWithBoundedSync(text: summaryToSpeak, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
+                messages.append(ConversationMessage(role: "assistant", content: summaryToSpeak))
                 state = .speaking
             }, onFinish: { [self] in
                 startConversationTimeout()

@@ -123,6 +123,19 @@ struct TaskRowView: View {
                                         .foregroundStyle(dateColor)
                                 }
                             }
+                            
+                            // Recurring icon (right of due date)
+                            if task.recurrenceRule != nil {
+                                let dateColor = Color.dueDateColor(for: task)
+                                Image(systemName: "repeat")
+                                    .font(.caption2)
+                                    .foregroundStyle(dateColor)
+                                    .padding(4)
+                                    .background(
+                                        Circle()
+                                            .stroke(dateColor, lineWidth: 1.5)
+                                    )
+                            }
                         }
                     }
                     
