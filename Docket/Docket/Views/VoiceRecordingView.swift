@@ -283,7 +283,7 @@ struct VoiceRecordingView: View {
         }
         .sheet(isPresented: $showingConfirmation) {
             if !parsedTasks.isEmpty {
-                TaskConfirmationView(tasks: $parsedTasks, onConfirm: saveTasks, onCancel: { dismiss() })
+                TaskConfirmationView(tasks: $parsedTasks, onConfirm: { saveTasks($0) }, onCancel: { dismiss() })
             }
         }
         .sheet(isPresented: $showMailCompose) {
@@ -624,21 +624,23 @@ struct VoiceRecordingView: View {
                     #if DEBUG
                     VoiceTrace.trace("state -> speaking (complete)")
                     #endif
-                    let needsConfirmation = summary.contains("?")
+                    // Save tasks immediately — the AI's "Anything else?" is a continuation
+                    // prompt, not a confirmation request. When type == "complete", the AI
+                    // has all the info it needs. Corrections are handled separately after TTS.
+                    if !isCorrection && !parsedTasks.isEmpty {
+                        saveTasks(parsedTasks, silent: true)
+                    }
                     ttsManager.speakWithBoundedSync(text: summary, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
                         state = .speaking
                         messages.append(ConversationMessage(role: "assistant", content: summary))
                     }, onFinish: { [self] in
                         if isCorrection {
                             updateSavedTasks(with: parsedTasks)
-                        } else if parsedTasks.isEmpty {
-                            state = .listening
-                            _Concurrency.Task { await speechManager.startRecording() }
-                        } else if needsConfirmation {
-                            state = .listening
-                            _Concurrency.Task { await speechManager.startRecording() }
                         } else {
-                            saveTasks(parsedTasks)
+                            // Tasks already saved; enter closing flow for "Anything else?"
+                            isInClosingFlow = true
+                            state = .listening
+                            _Concurrency.Task { await speechManager.startRecording() }
                         }
                     })
                 } else {
@@ -681,19 +683,21 @@ struct VoiceRecordingView: View {
         }
     }
     
-    private func saveTasks(_ tasks: [ParsedTask]) {
+    private func saveTasks(_ tasks: [ParsedTask], silent: Bool = false) {
         cancelConversationTimeout()
         
         guard !tasks.isEmpty else {
-            isInClosingFlow = true
-            let followUp = "Got it. Anything else?"
-            ttsManager.speakWithBoundedSync(text: followUp, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
-                messages.append(ConversationMessage(role: "assistant", content: followUp))
-                state = .speaking
-            }, onFinish: { [self] in
-                state = .listening
-                _Concurrency.Task { await speechManager.startRecording() }
-            })
+            if !silent {
+                isInClosingFlow = true
+                let followUp = "Got it. Anything else?"
+                ttsManager.speakWithBoundedSync(text: followUp, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
+                    messages.append(ConversationMessage(role: "assistant", content: followUp))
+                    state = .speaking
+                }, onFinish: { [self] in
+                    state = .listening
+                    _Concurrency.Task { await speechManager.startRecording() }
+                })
+            }
             return
         }
         
@@ -701,6 +705,10 @@ struct VoiceRecordingView: View {
         let generator = UINotificationFeedbackGenerator()
         generator.prepare()
         generator.notificationOccurred(.success)
+        
+        // Clear parsed tasks immediately (before async block) to prevent
+        // race condition where IntentClassifier sees stale hasPendingTasks=true
+        parsedTasks = []
         
         _Concurrency.Task {
             var savedTasks: [Task] = []
@@ -790,20 +798,20 @@ struct VoiceRecordingView: View {
             // Remember saved tasks for potential corrections
             lastSavedTasks = savedTasks
             
-            // Clear parsed tasks so we're ready for a new round
-            parsedTasks = []
-            
-            // Ask if the user wants to add more tasks
-            isInClosingFlow = true
-            let taskCount = tasks.count
-            let followUp = taskCount == 1 ? "Done! Anything else?" : "All \(taskCount) added! Anything else?"
-            ttsManager.speakWithBoundedSync(text: followUp, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
-                messages.append(ConversationMessage(role: "assistant", content: followUp))
-                state = .speaking
-            }, onFinish: { [self] in
-                state = .listening
-                _Concurrency.Task { await speechManager.startRecording() }
-            })
+            // When silent, the caller handles TTS and closing flow
+            if !silent {
+                // Ask if the user wants to add more tasks
+                isInClosingFlow = true
+                let taskCount = tasks.count
+                let followUp = taskCount == 1 ? "Done! Anything else?" : "All \(taskCount) added! Anything else?"
+                ttsManager.speakWithBoundedSync(text: followUp, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
+                    messages.append(ConversationMessage(role: "assistant", content: followUp))
+                    state = .speaking
+                }, onFinish: { [self] in
+                    state = .listening
+                    _Concurrency.Task { await speechManager.startRecording() }
+                })
+            }
         }
     }
     

@@ -279,10 +279,21 @@ Deno.serve(async (req: Request) => {
       const lines: string[] = [];
       const vocab = personalization.vocabularyAliases as Array<{ spoken?: string; canonical?: string }> | undefined;
       if (vocab && vocab.length > 0) {
-        const pairs = vocab
-          .filter((v) => v?.spoken && v?.canonical)
-          .map((v) => `"${v.spoken}" means "${v.canonical}"`);
-        if (pairs.length > 0) lines.push(`- Vocabulary: ${pairs.join(", ")}`);
+        // Group aliases by canonical form so the AI sees all known variants together
+        // e.g. "Tuftek"/"Tuftec" → "TuffTek" instead of two separate entries
+        const grouped = new Map<string, string[]>();
+        for (const v of vocab) {
+          if (!v?.spoken || !v?.canonical) continue;
+          const existing = grouped.get(v.canonical) ?? [];
+          existing.push(v.spoken);
+          grouped.set(v.canonical, existing);
+        }
+        const groupedPairs: string[] = [];
+        for (const [canonical, spokenForms] of grouped) {
+          const quoted = spokenForms.map((s) => `"${s}"`).join("/");
+          groupedPairs.push(`${quoted} → "${canonical}"`);
+        }
+        if (groupedPairs.length > 0) lines.push(`- Vocabulary corrections: ${groupedPairs.join(", ")}`);
       }
       const catMap = personalization.categoryMappings as Array<{ from?: string; to?: string }> | undefined;
       if (catMap && catMap.length > 0) {
@@ -293,10 +304,20 @@ Deno.serve(async (req: Request) => {
       }
       const stores = personalization.storeAliases as Array<{ spoken?: string; canonical?: string }> | undefined;
       if (stores && stores.length > 0) {
-        const pairs = stores
-          .filter((s) => s?.spoken && s?.canonical)
-          .map((s) => `"${s.spoken}" means "${s.canonical}"`);
-        if (pairs.length > 0) lines.push(`- Stores: ${pairs.join(", ")}`);
+        // Group store aliases by canonical form too
+        const grouped = new Map<string, string[]>();
+        for (const s of stores) {
+          if (!s?.spoken || !s?.canonical) continue;
+          const existing = grouped.get(s.canonical) ?? [];
+          existing.push(s.spoken);
+          grouped.set(s.canonical, existing);
+        }
+        const groupedPairs: string[] = [];
+        for (const [canonical, spokenForms] of grouped) {
+          const quoted = spokenForms.map((s) => `"${s}"`).join("/");
+          groupedPairs.push(`${quoted} → "${canonical}"`);
+        }
+        if (groupedPairs.length > 0) lines.push(`- Stores: ${groupedPairs.join(", ")}`);
       }
       const habits = personalization.timeHabits as Array<{ category?: string; pattern?: string }> | undefined;
       if (habits && habits.length > 0) {
@@ -306,7 +327,7 @@ Deno.serve(async (req: Request) => {
         if (habStrs.length > 0) lines.push(`- Time habits: ${habStrs.join("; ")}`);
       }
       if (lines.length > 0) {
-        systemContent += `\n\nUSER PREFERENCES (learned from past corrections):\n${lines.join("\n")}\nApply these preferences when parsing. Do not mention them to the user.`;
+        systemContent += `\n\nUSER PREFERENCES (learned from past corrections — ALWAYS apply these):\n${lines.join("\n")}\nThese corrections come from speech-to-text which often produces variant spellings of the same spoken word. Apply these even when the transcription is only phonetically similar (e.g. if "Tuftek" → "TuffTek" is listed, also correct "Tuftec", "Tuftech", "Tough Tech" to "TuffTek"). Use the canonical spelling in all task fields. Do not mention these corrections to the user.`;
       }
     }
     
