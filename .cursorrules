@@ -8,6 +8,7 @@ Voice-to-task with conversational AI lets users create, categorize, annotate, an
 - **MVP (Phases 1-4):** Complete — SwiftData, CRUD, categories, UI polish
 - **v1.0 (Phase 5):** Complete — Supabase cloud sync, auth, offline queue, sharing
 - **v1.1 (Phases 6-9):** In progress — Conversational voice-to-task
+- **Phase 13 (Unified AI Command Bar):** Upcoming — bottom command bar, voice + text unified, search implicit. See [UNIFIED-AI-COMMAND-BAR.md](UNIFIED-AI-COMMAND-BAR.md)
 
 ## Tech Stack
 - **Frontend:** SwiftUI (iOS 17+)
@@ -121,9 +122,15 @@ struct ParseResponse: Codable {
 - `Managers/SpeechRecognitionManager.swift` — SFSpeechRecognizer + AVAudioEngine wrapper
 - `Managers/TTSManager.swift` — OpenAI TTS (primary) + AVSpeechSynthesizer (fallback) for readback
 - `Managers/VoiceTaskParser.swift` — Calls Supabase Edge Function for AI parsing
-- `Views/VoiceRecordingView.swift` — Mic button + conversation overlay
+- `Views/VoiceRecordingView.swift` — Mic button + conversation overlay (to be absorbed into CommandBar per Phase 13)
 - `Views/TaskConfirmationView.swift` — Parsed task list with edit/confirm
 - `Models/ParsedTask.swift` — Lightweight struct for AI response (includes TaskContext, TaskChanges)
+
+### Unified AI Command Bar (Phase 13 — planned)
+- `Views/CommandBarView.swift` — Bottom command bar, voice + text unified, expansion animation
+- `Views/ConversationView.swift` — Shared chat UI (extracted from VoiceRecordingView)
+- `Views/TextInputBar.swift` — Compose bar + mode switch (text/voice/+)
+- See [UNIFIED-AI-COMMAND-BAR.md](UNIFIED-AI-COMMAND-BAR.md)
 
 ### Sharing & Notifications (v1.1)
 - `Views/ShareTaskView.swift` — Share method sheet (Docket-first primary action)
@@ -148,6 +155,7 @@ struct ParseResponse: Codable {
 - **Permissions required:** Microphone (`NSMicrophoneUsageDescription`), Speech Recognition (`NSSpeechRecognitionUsageDescription`)
 - **No new dependencies:** Speech, AVFoundation, AVSpeechSynthesizer are all built into iOS
 - See [VOICE-TO-TASK-V2.md](VOICE-TO-TASK-V2.md) for full architecture
+- See [UNIFIED-AI-COMMAND-BAR.md](UNIFIED-AI-COMMAND-BAR.md) for Unified AI Command Bar (voice + text unified, Phase 13)
 
 ## Voice UX Patterns (Learned the Hard Way)
 - **View identity = stability:** Live transcription and committed messages MUST share the same `.id()` scheme. Use a unified `displayMessages` computed property where the live text gets `id: "msg-\(messages.count)"` — the same ID it will have once committed. Prevents flicker.
@@ -156,6 +164,41 @@ struct ParseResponse: Codable {
 - **Don't withAnimation scroll calls:** `withAnimation { scrollProxy.scrollTo() }` animates content insertions, not just scroll. Use `DispatchQueue.main.async { scrollProxy.scrollTo() }` instead.
 - **Audio level feedback:** Calculate RMS in the audio tap (nonisolated), poll to @MainActor at ~12fps with EMA smoothing (0.3 old + 0.7 new). Mask a colored mic icon from bottom with the level value.
 - **Bottom-anchored chat:** Use `GeometryReader` + `.frame(minHeight: geometry.size.height, alignment: .bottom)` inside ScrollView so messages anchor to the bottom when few.
+
+## Voice-First Feature Development (MANDATORY)
+Every feature that creates, modifies, queries, or deletes data MUST be exposed to the voice-task AI. Voice is not an afterthought — it's a first-class input method alongside the GUI.
+
+**When adding any new feature, you MUST:**
+
+1. **Update the Edge Function prompt** (`parse-voice-tasks/index.ts`):
+   - Add the new capability to the system prompt so the AI knows it exists
+   - Define what voice utterances should trigger it (e.g., "set progress to 50%", "assign this to Sarah")
+   - Add the new fields/actions to the response schema
+
+2. **Extend ParsedTask / TaskContext / TaskChanges** (`Models/ParsedTask.swift`):
+   - New fields on task creation → add to `ParsedTask`
+   - New queryable state → add to `TaskContext` (sent as context each turn)
+   - New modifiable fields → add to `TaskChanges` (for voice updates)
+
+3. **Wire up CommandBar / conversation view handlers** (Phase 13: VoiceRecordingView absorbed into CommandBar):
+   - New response types or new fields in `type: "complete"` → handle in `saveTasks()`
+   - New fields in `type: "update"` → handle in the update handler
+   - New intents (e.g., "send to Slack") → add to IntentClassifier if local, or Edge Function if semantic
+
+4. **Test voice path**:
+   - Verify the AI can parse natural utterances for the new feature
+   - Verify the iOS side correctly handles the new fields/actions
+   - Verify TTS readback mentions the new capability naturally
+
+**Examples of features that required voice surface:**
+- Recurring tasks → `recurrenceRule` in ParsedTask + Edge Function prompt + saveTasks handler
+- Task updates/deletes → `type: "update"/"delete"` + TaskContext + TaskChanges + update/delete handlers
+- Grocery templates → `checklistItems`/`useTemplate` in ParsedTask + store context in prompt
+- Progress tracking → `progressPercentage` in TaskChanges + voice commands in prompt
+- Sharing → `shareWith` in ParsedTask + share resolution flow
+- Integrations → "send to Slack channel" in prompt + integration-aware context
+
+**If a feature cannot be voice-controlled, document WHY in the task spec** (e.g., "OAuth setup requires browser redirect — GUI only, but triggering a send via voice is supported after setup").
 
 ## Personalization Adaptation Guidelines (v1.2)
 - **Learn from explicit edits only:** do not infer personalized mappings without a user correction signal.

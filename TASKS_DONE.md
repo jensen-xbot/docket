@@ -1,0 +1,219 @@
+# Docket — Completed Tasks
+
+Archived from TODO.md. Completed work through Feb 2026.
+
+---
+
+## MVP (Phases 1-4) — COMPLETE
+
+- [x] Create project repository
+- [x] Initialize Xcode project (SwiftUI, iOS 17+)
+- [x] Set up project folder structure
+- [x] Configure gitignore for Xcode
+- [x] Create Task model (SwiftData)
+- [x] Build task list view
+- [x] Build create task view
+- [x] Build edit task view
+- [x] Implement complete/incomplete toggle
+- [x] Implement delete task
+- [x] Add local persistence (SwiftData)
+- [x] Basic UI polish (dark mode, animations)
+- [x] Branded splash screen with auth session check
+- [x] Category model upgrade (icons + colors via CategoryItem)
+- [x] Category icon/color picker (32 icons, 10 colors)
+- [x] Inline edit mode for categories (rename, delete, icon/color)
+- [x] Inline edit mode for stores (rename, delete)
+- [x] Task row UI refresh (category icons/colors, outlined due date badges)
+- [x] CategoryStore singleton for consistent state across views
+- [x] Test on physical device
+
+---
+
+## v1.0: Cloud Sync Foundation — COMPLETE
+
+### Phase 5: Cloud Infrastructure
+
+- [x] Set up Supabase project
+- [x] Create database schema (Tasks table)
+- [x] Configure Row Level Security (RLS) policies
+- [x] Implement Supabase Auth (email + Apple Sign In)
+- [x] Create sync service (SwiftData <> Supabase)
+- [x] Handle offline queue and conflict resolution
+  - [x] NetworkMonitor (NWPathMonitor) for connectivity detection
+  - [x] Network guards on all push/pull methods (offline -> .pending, not .failed)
+  - [x] Automatic retry with exponential backoff (2s, 8s, 30s) for failed items
+  - [x] Auto-flush pending queue on network reconnect
+  - [x] Conflict logging when remote overwrites local pending changes
+  - [x] Offline/pending UI indicators in TaskListView
+- [x] Add due dates with local notifications
+- [x] SyncEngine lifecycle refactor (single instance via environment, foreground sync)
+- [x] Swift 6 strict concurrency fixes (see SWIFT6-CONCURRENCY-GUIDE.md)
+
+---
+
+## v1.1: Conversational Voice-to-Task
+
+### P0: Active Stability Hotfixes — Voice Hotfix One-Pass DONE
+
+- [x] **Reproduce + eliminate lingering transcription flicker**
+  - [x] Add deterministic repro matrix
+  - [x] Add temporary timestamped event tracing (DEBUG only: `[VoiceTrace]`)
+  - [x] Single-source rendering: live transcript stays visible until commit (removed `!isProcessingUtterance` from displayMessages)
+- [x] **Fix pre-silence flash** — live transcript remains visible until commit + clear (atomic on MainActor).
+- [x] **Interruption handling**
+  - [x] `.ended`: view-driven `shouldResumeAfterInterruption`; manager resumes listening when flag set and was in listening flow
+  - [x] `.began`: manager stops recording
+- [x] **Silence timeout 2.2s** — baseline 2.2s (short), 2.8s (3+ words); adaptive in SpeechRecognitionManager.
+- [x] **TTS presentation (synchronized text + audio)**
+  - [x] `speakWithBoundedSync`: request TTS first; if ready within 750ms reveal text + play together; else reveal text and show "Preparing voice..." until playback
+  - [x] TTS request timeout 8s; fallback to Apple TTS
+
+### Phase 6: Speech Capture + TTS Foundation — COMPLETE
+
+- [x] Add Speech framework entitlement
+- [x] Add `NSMicrophoneUsageDescription` and `NSSpeechRecognitionUsageDescription` to Info.plist
+- [x] Create SpeechRecognitionManager (SFSpeechRecognizer + AVAudioEngine)
+- [x] Create TTSManager (AVSpeechSynthesizer with completion callback)
+- [x] Implement AVAudioSession switching (`.playAndRecord` + `.defaultToSpeaker`)
+- [x] Handle audio session interruptions (`AVAudioSession.interruptionNotification`)
+- [x] Build VoiceRecordingView (mic button + conversation overlay)
+- [x] Fix Swift 6 dispatch_assert_queue crashes (nonisolated static helpers, async APIs)
+- [x] Silence detection with adaptive timeout (2.2s short / 2.8s long utterances)
+- [x] Tune silence timeout for production UX (2.2s baseline, validate on real speech)
+- [x] Test on device: speak -> transcription -> TTS readback -> mic restarts
+
+### Phase 7: Conversational AI Parsing — COMPLETE
+
+- [x] Set up OpenRouter account + API key
+- [x] Supabase Edge Function `parse-voice-tasks` (conversational system prompt, gpt-4.1-mini)
+- [x] Edge Function receives `messages[]` array (not single text)
+- [x] Edge Function returns `{ type: "question"|"complete", ... }`
+- [x] Build VoiceTaskParser (sends messages[], handles question/complete responses)
+  - [x] Fixed 401 auth: disabled gateway verify_jwt, function validates via getUser()
+  - [x] Uses Supabase SDK `functions.invoke()` with explicit Authorization header
+- [x] Build ParsedTask, ConversationMessage, ParseResponse models
+- [x] Implement conversation loop on iOS (messages array + if/else on response type)
+- [x] Resilient response validation (unexpected AI types coerced to "question")
+- [x] Time-aware greetings (Good morning/afternoon/evening based on timezone)
+- [x] DateTime support: "at 9am" -> `yyyy-MM-ddTHH:mm` format with hasTime flag
+- [x] Test multi-turn: partial info -> AI asks -> user responds -> task created
+- [x] Test power-user: full utterance -> instant task creation (no follow-ups)
+- [x] English only for v1.1
+
+### Phase 8: Confirmation + Continuation — COMPLETE
+
+- [x] Wire up: conversation complete -> immediate auto-save (tasks saved before TTS readback)
+- [x] Voice confirmation: listen for "yes" / "add it" after AI asks "Want me to add?"
+- [x] "Anything else?" flow: after saving, ask if user wants to add more tasks
+- [x] Dismissal detection: "no" / "that's all" / "I'm done" closes voice view
+- [x] Integrate voice-created tasks into synced model (SwiftData + SyncEngine push)
+- [x] Build TaskConfirmationView polish (notes + share target display, inline editing)
+- [x] Share resolution flow (name -> email via contacts cache or inline prompt)
+- [x] Handle corrections mid-conversation ("actually make it Wednesday")
+  - [x] Pre-save corrections: say correction before confirmation → AI returns updated tasks
+  - [x] Post-save corrections: say correction after "Anything else?" → updates existing task in SwiftData + Supabase
+  - [x] Word boundary matching for yes/no/dismiss detection (prevents "note" matching "no")
+- [x] TTS mute toggle in Settings
+
+### Phase 9: Voice Polish — COMPLETE
+
+- [x] Upgrade TTS to OpenAI TTS API (tts-1, ~$0.0015/response) — natural-sounding voices replace robotic AVSpeechSynthesizer
+  - [x] Edge Function `text-to-speech` calls OpenAI TTS API, returns MP3 audio
+  - [x] TTSManager uses AVAudioPlayer for OpenAI TTS, keeps AVSpeechSynthesizer as fallback
+  - [x] Voice picker in Settings: alloy, echo, fable, onyx, nova (default), shimmer
+  - [x] Automatic fallback to Apple TTS if OpenAI fails (network error, API down)
+  - [x] "Natural voice" toggle in ProfileView (defaults to enabled)
+- [x] Error handling (no speech, network down, AI failure, unknown share recipient)
+- [x] Loading states and progress indicators (pulsing mic, "thinking" state)
+- [x] Haptic feedback (start recording, task created, error)
+- [x] Edge cases (empty input, very long dictation, conversation timeout)
+- [x] Optional: Whisper API fallback for accuracy
+- [x] Voice recording UX overhaul (Feb 2026)
+  - [x] Fix live transcription flicker (unified displayMessages list with shared IDs)
+  - [x] Fix stale SFSpeechRecognizer callbacks overwriting committed text
+  - [x] Fix chat not auto-scrolling (ScrollViewReader + GeometryReader bottom-anchored)
+  - [x] Fix chat bubbles looking boxy (Spacer(minLength: 48) + clipShape)
+  - [x] Fix header wasting space (reduced VStack spacing, tighter padding)
+  - [x] Red breathing mic button with phaseAnimator (restarts reliably on every listen cycle)
+  - [x] Green audio-level indicator inside mic icon (RMS + EMA smoothing at ~12fps)
+  - [x] Double-processing guard (isProcessingUtterance flag)
+- [x] Siri Shortcuts integration
+- [x] Recurring tasks (data model, UI in Edit/Add, task row icon, voice parsing)
+
+### Phase 10: Personalization Adaptation (v1.2 Foundation)
+
+- [x] Personalization architecture + privacy spec (opt-in, reset, retention window)
+- [x] Add `TaskSource` metadata to distinguish voice-created tasks from manual tasks
+- [x] Snapshot-based correction tracking on edits to voice-created tasks
+- [x] Create `record-corrections` Edge Function with auth, validation, deduplication, and rate limiting
+- [x] Create `user_voice_profiles` schema (vocabulary aliases, category mappings, store aliases, time habits)
+- [x] Inject compact personalization context into `parse-voice-tasks` prompt
+- [x] Add UI controls in Profile: "Personalization On/Off" + "Reset learned voice data"
+- [x] Fix voice task save bug: tasks now save immediately on `type: "complete"` instead of deferring to confirmation
+  - Root cause: `summary.contains("?")` treated AI's "Anything else?" as needing user confirmation before saving
+  - Fix: `saveTasks(_, silent: true)` saves before TTS, `parsedTasks` cleared immediately to prevent IntentClassifier race
+- [x] Fuzzy vocabulary matching (hybrid approach)
+  - Prompt engineering: AI instructed to apply aliases even when transcription is phonetically similar (covers novel variants)
+  - Variant accumulation: each new transcription variant stored as separate alias (explicit safety net for fuzzy failures)
+  - Aliases grouped by canonical form in prompt (`"Tuftek"/"Tuftec" → "TuffTek"` instead of separate entries)
+- [x] Cascade fix: `voice_corrections.task_id` changed from `ON DELETE CASCADE` to `ON DELETE SET NULL` (migration 017)
+  - Correction audit records survive task deletion; voice profile mappings were already independent
+
+### Pre-Launch Hardening (partial)
+
+- [x] Edge Function rate limiting (prevent abuse/runaway costs — 60 req/hr/user)
+- [x] Edge Function request timeout (15s abort controller — prevents hanging requests)
+- [x] Privacy manifest (required for App Store since 2024)
+
+---
+
+## Sharing System V2 (Epic)
+
+- [x] Phase 1: UI and visibility (no schema break)
+  - [x] Share method sheet: Docket first, larger/bolder with logo
+  - [x] Sender-side "shared with" indicator on task rows
+  - [x] SyncEngine: pull-on-reconnect
+- [x] Phase 2: Invite/connection model (backend migrations)
+  - [x] task_shares status lifecycle: pending, accepted, declined
+  - [x] Recipient UPDATE policy for accept/decline
+- [x] Phase 3: Invite UX + notifications center
+  - [x] notifications table + RLS
+  - [x] Bell badge + inbox UI
+  - [x] Accept/decline in contacts
+- [x] Phase 4: Realtime bilateral edits (LWW)
+  - [x] Supabase Realtime subscriptions in SyncEngine
+- [x] Phase 5: Documentation (TODO, PRD, WORKFLOW)
+
+---
+
+## Future / v2.0 (partial)
+
+- [x] Voice-aware grocery lists
+  - [x] Send user's store names + template item counts as context to Edge Function
+  - [x] If grocery is the only ask -> "Do you have a specific store in mind?"
+  - [x] If user names a store with a template -> "You have a Costco template with 12 items. Want me to use it?"
+  - [x] If "yes" -> create task with checklist items from template (useTemplate field)
+  - [x] If "just a few items" -> create task with checklist items from AI-suggested names (checklistItems field)
+  - [x] ParsedTask extended with checklistItems and useTemplate fields
+  - [x] saveTasks() handles both template loading and ad-hoc item creation
+  - Foundation exists: GroceryStore templates, IngredientLibrary, checklist items all in SwiftData + Supabase
+- [x] Voice task updates and deletion
+  - [x] Send current task titles/IDs as context to Edge Function each call
+  - [x] New response types: "update" (modify existing task) and "delete" (remove task)
+  - [x] Support: "mark call mom as done", "move dentist to Thursday", "delete the client email"
+  - [x] iOS side: match task by title/ID in SwiftData, apply changes or delete
+  - [x] Context size: ~50 task titles fit easily in gpt-4.1-mini context window
+  - [x] Edge Function updated with task awareness in system prompt
+  - [x] TaskContext and TaskChanges models added
+  - [x] Update/delete handlers implemented in VoiceRecordingView
+
+---
+
+## Research Completed
+
+- [x] Voice-to-text options (Apple Speech vs Whisper)
+- [x] Audio streaming architecture
+- [x] WebSocket gateway patterns (for v1.1)
+- [x] NLU approaches for task extraction
+- [x] Supabase sync strategies
+- See [VOICE-TO-TASK-PLAN.md](VOICE-TO-TASK-PLAN.md) for voice details

@@ -21,9 +21,9 @@
 
 | # | Tutorial | Trigger | Content | Status |
 |---|----------|---------|---------|--------|
-| T1 | **Welcome** | First app open | "Welcome to Docket. Tap + to create your first task." | 📝 Draft |
+| T1 | **Welcome** | First app open | "Tap below to create your first task. Type or speak to ask Docket anything." | 📝 Draft |
 | T2 | **Completion Button** | First task created | "Tap once for progress • Double-tap to complete" | 📝 Draft |
-| T3 | **Voice Input** | First mic button tap | "Speak naturally • AI will ask follow-ups if needed" | 📝 Draft |
+| T3 | **Voice Input** | First tap on 5-bars in command bar | "Speak naturally • AI will ask follow-ups if needed" | 📝 Draft |
 | T4 | **Sharing** | First share button tap | "Share tasks via email or text • Recipients can edit too" | 📝 Draft |
 | T5 | **Templates** | First profile hub visit | "Create grocery templates for quick lists" | 📝 Draft |
 | T6 | **Checklists** | First checklist added | "Add items • Track progress • Tap to complete each" | 📝 Draft |
@@ -31,6 +31,10 @@
 | T8 | **Categories** | First category created | "Customize icons and colors • Organize your way" | 📝 Draft |
 | T9 | **Notifications** | First due date set | "Enable notifications for reminders" | 📝 Draft |
 | T10 | **Voice Corrections** | First AI mistake | "Tap to edit • AI learns from your corrections" | 📝 Draft |
+| T11 | **Command Bar** | First app open (replaces T1) | "Type or speak to create tasks, find tasks, or ask Docket anything." | 📝 Draft |
+| T12 | **Search Mode** | First time typing in command bar | "Tasks filter as you type. Hit send to ask the AI." | 📝 Draft |
+| T13 | **Voice Mode** | First tap on 5-bars icon | "Speak naturally. AI extracts tasks and asks follow-ups." | 📝 Draft |
+| T14 | **"+" Menu** | First long-press on (+) | "Create a manual task or attach a photo." | 📝 Draft |
 
 ---
 
@@ -86,7 +90,7 @@ var hasSeenCompletionTutorial = false
 
 ## Tutorial T3: Voice Input (Priority)
 
-**Trigger:** First tap on mic button
+**Trigger:** First tap on 5-bars icon in command bar (voice mode)
 
 ### Design
 
@@ -161,6 +165,10 @@ class TutorialManager {
         case categories = "T8"
         case notifications = "T9"
         case voiceCorrections = "T10"
+        case commandBar = "T11"
+        case searchMode = "T12"
+        case voiceMode = "T13"
+        case plusMenu = "T14"
         
         var title: String {
             switch self {
@@ -174,6 +182,10 @@ class TutorialManager {
             case .categories: return "Categories"
             case .notifications: return "Notifications"
             case .voiceCorrections: return "Voice Corrections"
+            case .commandBar: return "Ask Docket"
+            case .searchMode: return "Search Mode"
+            case .voiceMode: return "Voice Mode"
+            case .plusMenu: return "\"+\" Menu"
             }
         }
         
@@ -501,11 +513,11 @@ Analytics.track("feature_used_after_tutorial", [
 
 | Tutorial | When | Content |
 |----------|------|---------|
-| T11 | First AI mistake | "AI learns from your edits" |
-| T12 | First share accepted | "Shared tasks update in real-time" |
-| T13 | First recurring task | "Tasks repeat automatically" |
-| T14 | First widget added | "See tasks on your home screen" |
-| T15 | 30 days usage | "Pro tips: Shortcuts, Siri, Watch" |
+| T15 | First AI mistake | "AI learns from your edits" |
+| T16 | First share accepted | "Shared tasks update in real-time" |
+| T17 | First recurring task | "Tasks repeat automatically" |
+| T18 | First widget added | "See tasks on your home screen" |
+| T19 | 30 days usage | "Pro tips: Shortcuts, Siri, Watch" |
 
 ---
 
@@ -515,7 +527,7 @@ Analytics.track("feature_used_after_tutorial", [
 - [ ] Create `TutorialModal.swift`
 - [ ] Create `TutorialOverlay` view modifier
 - [ ] Add T2 (Completion) to TaskListView
-- [ ] Add T3 (Voice) to VoiceRecordingView
+- [ ] Add T3 (Voice) to CommandBar (voice mode)
 - [ ] Add Settings > Tutorials screen
 - [ ] Add analytics tracking
 - [ ] Test tutorial dismissal persists

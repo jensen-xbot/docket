@@ -1,150 +1,22 @@
 # TODO: Docket
 
-## MVP (Phases 1-4) - COMPLETE
+**Completed work:** See [TASKS_DONE.md](TASKS_DONE.md)  
+**Product roadmap:** See [PRODUCT-ROADMAP.md](PRODUCT-ROADMAP.md)  
+**Command Bar spec:** See [UNIFIED-AI-COMMAND-BAR.md](UNIFIED-AI-COMMAND-BAR.md)
 
-- [x] Create project repository
-- [x] Initialize Xcode project (SwiftUI, iOS 17+)
-- [x] Set up project folder structure
-- [x] Configure gitignore for Xcode
-- [x] Create Task model (SwiftData)
-- [x] Build task list view
-- [x] Build create task view
-- [x] Build edit task view
-- [x] Implement complete/incomplete toggle
-- [x] Implement delete task
-- [x] Add local persistence (SwiftData)
-- [x] Basic UI polish (dark mode, animations)
-- [x] Branded splash screen with auth session check
-- [x] Category model upgrade (icons + colors via CategoryItem)
-- [x] Category icon/color picker (32 icons, 10 colors)
-- [x] Inline edit mode for categories (rename, delete, icon/color)
-- [x] Inline edit mode for stores (rename, delete)
-- [x] Task row UI refresh (category icons/colors, outlined due date badges)
-- [x] CategoryStore singleton for consistent state across views
-- [x] Test on physical device
+---
 
-## v1.0: Cloud Sync Foundation - COMPLETE
+## v1.1: Voice — Remaining Work
 
-### Phase 5: Cloud Infrastructure
+### P0: Active Stability Hotfixes
 
-- [x] Set up Supabase project
-- [x] Create database schema (Tasks table)
-- [x] Configure Row Level Security (RLS) policies
-- [x] Implement Supabase Auth (email + Apple Sign In)
-- [x] Create sync service (SwiftData <> Supabase)
-- [x] Handle offline queue and conflict resolution
-  - [x] NetworkMonitor (NWPathMonitor) for connectivity detection
-  - [x] Network guards on all push/pull methods (offline -> .pending, not .failed)
-  - [x] Automatic retry with exponential backoff (2s, 8s, 30s) for failed items
-  - [x] Auto-flush pending queue on network reconnect
-  - [x] Conflict logging when remote overwrites local pending changes
-  - [x] Offline/pending UI indicators in TaskListView
-- [x] Add due dates with local notifications
-- [x] SyncEngine lifecycle refactor (single instance via environment, foreground sync)
-- [x] Swift 6 strict concurrency fixes (see SWIFT6-CONCURRENCY-GUIDE.md)
-
-## v1.1: Conversational Voice-to-Task - IN PROGRESS
-
-### P0: Active Stability Hotfixes — Voice Hotfix One-Pass DONE
-
-- [x] **Reproduce + eliminate lingering transcription flicker**
-  - [x] Add deterministic repro matrix (see below)
-  - [x] Add temporary timestamped event tracing (DEBUG only: `[VoiceTrace]`)
-  - [x] Single-source rendering: live transcript stays visible until commit (removed `!isProcessingUtterance` from displayMessages)
-  - [ ] Confirm on device under network latency and long dictation; remove debug instrumentation after validation
+- [ ] Confirm on device under network latency and long dictation; remove debug instrumentation after validation
   - **Repro matrix (DEBUG build):** Manual vs silence stop | Whisper on/off | Natural TTS on/off | Interruption during listen/speak. Events: speech partial, silence reset/fire, stopRecording entry/exit, message append, transcribedText clear, TTS start/audio-ready/playback/finish.
-- [x] **Fix pre-silence flash** — live transcript remains visible until commit + clear (atomic on MainActor).
-- [x] **Interruption handling**
-  - [x] `.ended`: view-driven `shouldResumeAfterInterruption`; manager resumes listening when flag set and was in listening flow
-  - [x] `.began`: manager stops recording
-  - [ ] QA: phone call, Siri, AirPods during handoff
-- [x] **Silence timeout 2.2s** — baseline 2.2s (short), 2.8s (3+ words); adaptive in SpeechRecognitionManager.
-- [x] **TTS presentation (synchronized text + audio)**
-  - [x] `speakWithBoundedSync`: request TTS first; if ready within 750ms reveal text + play together; else reveal text and show "Preparing voice..." until playback
-  - [x] TTS request timeout 8s; fallback to Apple TTS
+- [ ] QA: phone call, Siri, AirPods during handoff
 - **Residual risk:** Remove `#if DEBUG` VoiceTrace after device validation. Manual QA for interruption + long dictation recommended.
 
-### Phase 6: Speech Capture + TTS Foundation - COMPLETE
+### Phase 10: Personalization — Metrics Dashboard
 
-- [x] Add Speech framework entitlement
-- [x] Add `NSMicrophoneUsageDescription` and `NSSpeechRecognitionUsageDescription` to Info.plist
-- [x] Create SpeechRecognitionManager (SFSpeechRecognizer + AVAudioEngine)
-- [x] Create TTSManager (AVSpeechSynthesizer with completion callback)
-- [x] Implement AVAudioSession switching (`.playAndRecord` + `.defaultToSpeaker`)
-- [x] Handle audio session interruptions (`AVAudioSession.interruptionNotification`)
-- [x] Build VoiceRecordingView (mic button + conversation overlay)
-- [x] Fix Swift 6 dispatch_assert_queue crashes (nonisolated static helpers, async APIs)
-- [x] Silence detection with adaptive timeout (2.2s short / 2.8s long utterances)
-- [x] Tune silence timeout for production UX (2.2s baseline, validate on real speech)
-- [x] Test on device: speak -> transcription -> TTS readback -> mic restarts
-
-### Phase 7: Conversational AI Parsing - COMPLETE
-
-- [x] Set up OpenRouter account + API key
-- [x] Supabase Edge Function `parse-voice-tasks` (conversational system prompt, gpt-4.1-mini)
-- [x] Edge Function receives `messages[]` array (not single text)
-- [x] Edge Function returns `{ type: "question"|"complete", ... }`
-- [x] Build VoiceTaskParser (sends messages[], handles question/complete responses)
-  - [x] Fixed 401 auth: disabled gateway verify_jwt, function validates via getUser()
-  - [x] Uses Supabase SDK `functions.invoke()` with explicit Authorization header
-- [x] Build ParsedTask, ConversationMessage, ParseResponse models
-- [x] Implement conversation loop on iOS (messages array + if/else on response type)
-- [x] Resilient response validation (unexpected AI types coerced to "question")
-- [x] Time-aware greetings (Good morning/afternoon/evening based on timezone)
-- [x] DateTime support: "at 9am" -> `yyyy-MM-ddTHH:mm` format with hasTime flag
-- [x] Test multi-turn: partial info -> AI asks -> user responds -> task created
-- [x] Test power-user: full utterance -> instant task creation (no follow-ups)
-- [x] English only for v1.1
-
-### Phase 8: Confirmation + Continuation - COMPLETE
-
-- [x] Wire up: conversation complete -> auto-save if no "?" in summary
-- [x] Voice confirmation: listen for "yes" / "add it" after AI asks "Want me to add?"
-- [x] "Anything else?" flow: after saving, ask if user wants to add more tasks
-- [x] Dismissal detection: "no" / "that's all" / "I'm done" closes voice view
-- [x] Integrate voice-created tasks into synced model (SwiftData + SyncEngine push)
-- [x] Build TaskConfirmationView polish (notes + share target display, inline editing)
-- [x] Share resolution flow (name -> email via contacts cache or inline prompt)
-- [x] Handle corrections mid-conversation ("actually make it Wednesday")
-  - [x] Pre-save corrections: say correction before confirmation → AI returns updated tasks
-  - [x] Post-save corrections: say correction after "Anything else?" → updates existing task in SwiftData + Supabase
-  - [x] Word boundary matching for yes/no/dismiss detection (prevents "note" matching "no")
-- [x] TTS mute toggle in Settings
-
-### Phase 9: Voice Polish — COMPLETE
-
-- [x] Upgrade TTS to OpenAI TTS API (tts-1, ~$0.0015/response) — natural-sounding voices replace robotic AVSpeechSynthesizer
-  - [x] Edge Function `text-to-speech` calls OpenAI TTS API, returns MP3 audio
-  - [x] TTSManager uses AVAudioPlayer for OpenAI TTS, keeps AVSpeechSynthesizer as fallback
-  - [x] Voice picker in Settings: alloy, echo, fable, onyx, nova (default), shimmer
-  - [x] Automatic fallback to Apple TTS if OpenAI fails (network error, API down)
-  - [x] "Natural voice" toggle in ProfileView (defaults to enabled)
-- [x] Error handling (no speech, network down, AI failure, unknown share recipient)
-- [x] Loading states and progress indicators (pulsing mic, "thinking" state)
-- [x] Haptic feedback (start recording, task created, error)
-- [x] Edge cases (empty input, very long dictation, conversation timeout)
-- [x] Optional: Whisper API fallback for accuracy
-- [x] Voice recording UX overhaul (Feb 2026)
-  - [x] Fix live transcription flicker (unified displayMessages list with shared IDs)
-  - [x] Fix stale SFSpeechRecognizer callbacks overwriting committed text
-  - [x] Fix chat not auto-scrolling (ScrollViewReader + GeometryReader bottom-anchored)
-  - [x] Fix chat bubbles looking boxy (Spacer(minLength: 48) + clipShape)
-  - [x] Fix header wasting space (reduced VStack spacing, tighter padding)
-  - [x] Red breathing mic button with phaseAnimator (restarts reliably on every listen cycle)
-  - [x] Green audio-level indicator inside mic icon (RMS + EMA smoothing at ~12fps)
-  - [x] Double-processing guard (isProcessingUtterance flag)
-- [x] Siri Shortcuts integration
-- [x] Recurring tasks (data model, UI in Edit/Add, task row icon, voice parsing)
-
-### Phase 10: Personalization Adaptation (v1.2 Foundation)
-
-- [x] Personalization architecture + privacy spec (opt-in, reset, retention window)
-- [x] Add `TaskSource` metadata to distinguish voice-created tasks from manual tasks
-- [x] Snapshot-based correction tracking on edits to voice-created tasks
-- [x] Create `record-corrections` Edge Function with auth, validation, deduplication, and rate limiting
-- [x] Create `user_voice_profiles` schema (vocabulary aliases, category mappings, store aliases, time habits)
-- [x] Inject compact personalization context into `parse-voice-tasks` prompt
-- [x] Add UI controls in Profile: "Personalization On/Off" + "Reset learned voice data"
 - [ ] Add metrics dashboard:
   - [ ] edit-after-voice rate
   - [ ] auto-confirm rate
@@ -153,6 +25,7 @@
   - [ ] personalization hit rate (alias/mapping applied)
 
 ### Phase 11: Inline Task Cards in Voice Chat
+
 Voice-created tasks appear as editable cards directly in the chat window. Tasks auto-save immediately AND show as inline cards that phase in one-by-one. Users can expand a card to edit or delete without leaving the voice session. Only one card expands at a time. Delete requires confirmation.
 
 - [ ] ChatTaskCard view
@@ -166,7 +39,7 @@ Voice-created tasks appear as editable cards directly in the chat window. Tasks 
   - [ ] After AI summary + auto-save, cards phase in one-by-one (~0.3s delay between each)
   - [ ] Transition: move from bottom + opacity fade-in
   - [ ] ScrollView auto-scrolls as each card appears
-- [ ] Integration with VoiceRecordingView
+- [ ] Integration with CommandBar (expanded conversation view)
   - [ ] Insert task cards into chat after the AI summary bubble (not in displayMessages — separate rendered section)
   - [ ] Track `@State var savedTaskCards: [Task]` for cards currently visible in chat
   - [ ] Track `@State var expandedCardId: UUID?` for single-expand behavior
@@ -216,14 +89,60 @@ Full subtask support: each subtask is a full Task with title, due dates, priorit
   - [ ] SyncEngine: Push parent before children; pull maintains hierarchy
   - [ ] Offline queue: Respect parent-child order on flush
 
+### Phase 13: Unified AI Command Bar
+
+Replace search, toolbar mic, and toolbar "+" with a single bottom-positioned command bar. One input, three modes (voice, text, +), same conversation backend. Full spec: [UNIFIED-AI-COMMAND-BAR.md](UNIFIED-AI-COMMAND-BAR.md).
+
+- [ ] Phase 13a: CommandBarView (collapsed bar, text input, expansion animation)
+  - [ ] Bottom-positioned bar via `.safeAreaInset(edge: .bottom)`
+  - [ ] Placeholder "Ask Docket anything...", (+) on left, 5-bars icon on right
+  - [ ] Tap field → keyboard rises, 5-bars morphs to submit arrow (crossfade ~0.2s)
+  - [ ] Field grows vertically like iMessage for multi-line input
+  - [ ] Expansion animation: bar grows upward into full conversation view on submit
+  - [ ] Keyboard + safe area handling (keyboardLayoutGuide, iPhone SE test)
+- [ ] Phase 13b: ConversationView extraction (refactor from VoiceRecordingView)
+  - [ ] Extract shared chat UI (bubbles, messages, layout) into `ConversationView`
+  - [ ] Shared `displayMessages` pattern, unified ID scheme for bubbles
+  - [ ] ConversationView used by both text and voice modes in expanded state
+- [ ] Phase 13c: Text AI mode (wire typed input to Edge Function, no TTS)
+  - [ ] Send typed text as `messages[]` to `parse-voice-tasks` (skip transcription)
+  - [ ] Handle ParseResponse (question, complete, update, delete) same as voice
+  - [ ] No TTS in text mode — text bubbles only
+  - [ ] saveTasks(), update handler, delete handler — same logic
+- [ ] Phase 13d: Voice mode integration (migrate VoiceRecordingView into CommandBar)
+  - [ ] Tap 5-bars → full expansion, mic active, TTS active
+  - [ ] Absorb SpeechRecognitionManager, TTSManager, IntentClassifier into CommandBar flow
+  - [ ] VoiceRecordingView deprecated as standalone sheet
+  - [ ] Siri Shortcut opens CommandBar in voice mode instead of sheet
+- [ ] Phase 13e: Search filtering (live filter while typing, magnifying glass indicator)
+  - [ ] Tasks filter live as user types (always-on, no toggle)
+  - [ ] Magnifying glass indicator (blue when filtering active)
+  - [ ] Single-line: filtered results prominent; multi-line: results fade
+  - [ ] Pull-down within expanded conversation: search through chat history
+- [ ] Phase 13f: "+" context menu (Manual Task, Attach Picture)
+  - [ ] Long-press (+) → context menu
+  - [ ] "Manual Task" → full AddTaskView sheet
+  - [ ] "Attach Picture" → camera + photo album access (future phase)
+- [ ] Phase 13g: Deprecation cleanup
+  - [ ] Remove `.searchable` modifier from TaskListView
+  - [ ] Remove mic toolbar button and `showingVoiceRecording` state
+  - [ ] Remove "+" toolbar button (AddTaskView still available via "+" menu)
+  - [ ] Toolbar: filter, bell, profile only
+  - [ ] EmptyListView CTA: "Tap below to create your first task" (point to command bar)
+- [ ] Phase 13h: One-shot auto-collapse (success toast for instant completions)
+  - [ ] When AI returns `type: "complete"` on first turn → auto-collapse bar
+  - [ ] Success toast + haptic feedback
+  - [ ] Multi-turn stays open for follow-up
+- [ ] Phase 13i: Mid-conversation mode switching (voice ↔ text)
+  - [ ] Text input bar visible in expanded view during voice mode
+  - [ ] User can type follow-up mid-conversation (and vice versa)
+  - [ ] Same `messages[]` array for both modes
+
 ### Pre-Launch Hardening
 
-- [x] Edge Function rate limiting (prevent abuse/runaway costs — 60 req/hr/user)
-- [x] Edge Function request timeout (15s abort controller — prevents hanging requests)
 - [ ] Transcription retry logic (auto-retry on transient SFSpeechRecognizer failures, max 2 retries)
 - [ ] Haptic refinement (distinct patterns: success, correction, error, speech detected)
 - [ ] Audio waveform visualization (animate bars with voice level during recording)
-- [x] Privacy manifest (required for App Store since 2024)
 - [ ] Accessibility audit (VoiceOver on VoiceRecordingView, 44pt tap targets, Reduce Motion)
 - [ ] Pre-launch test matrix:
   - [ ] Network offline during voice → offline indicator, queue for retry
@@ -245,34 +164,176 @@ Full subtask support: each subtask is a full Task with title, due dates, priorit
 - [ ] Error tracking (transcription failures, AI parse errors, TTS fallback rate)
 - [ ] Engagement metrics (voice vs manual creation ratio, edit-after-voice rate)
 
-## Sharing System V2 (Epic)
+---
 
-**Locked decisions (2026-02):**
+## Sharing System V2 — Phase 6: QA
 
-- **Editing model:** Both users can edit shared tasks; last-write-wins conflict behavior.
-- **Invite gating:** Require invite/connection acceptance for new contacts; existing accepted contacts can share immediately.
-- **Voice latency:** Deterministic control intents stay local; semantic parsing stays in Edge Function.
-
-- [x] Phase 1: UI and visibility (no schema break)
-  - [x] Share method sheet: Docket first, larger/bolder with logo
-  - [x] Sender-side "shared with" indicator on task rows
-  - [x] SyncEngine: pull-on-reconnect
-- [x] Phase 2: Invite/connection model (backend migrations)
-  - [x] task_shares status lifecycle: pending, accepted, declined
-  - [x] Recipient UPDATE policy for accept/decline
-- [x] Phase 3: Invite UX + notifications center
-  - [x] notifications table + RLS
-  - [x] Bell badge + inbox UI
-  - [x] Accept/decline in contacts
-- [x] Phase 4: Realtime bilateral edits (LWW)
-  - [x] Supabase Realtime subscriptions in SyncEngine
-- [x] Phase 5: Documentation (TODO, PRD, WORKFLOW)
-- [ ] Phase 6: QA — run verification matrix:
+- [ ] Run verification matrix:
   - [ ] Owner shares to accepted contact → immediate collaboration
   - [ ] Owner shares to new contact → pending invite; recipient accept/decline
   - [ ] Both users edit same task → LWW converges on both devices
   - [ ] Push notification → opens correct destination; badge updates
   - [ ] Manual QA: owner/recipient × online/offline/reconnect
+
+---
+
+## Sharing System V3: Multi-Person Collaboration + Activity Intelligence
+
+Multi-person sharing with per-user change tracking, AI-summarized activity feeds, and per-task notification controls. Transforms Docket from a personal task app into a lightweight team collaboration tool.
+
+### Phase 1: Multi-Person Sharing
+
+- [ ] Data model
+  - [ ] `task_shares` supports N recipients per task (already 1:1 rows — extend UI to add multiple)
+  - [ ] `task_collaborators` view or query: all users on a given task (owner + all accepted shares)
+  - [ ] Role-based permissions: owner (full control), editor (can modify), viewer (read-only)
+  - [ ] Assignment: `assignee_id` on task — shared with 5, assigned to 1 (shows assignee avatar prominently)
+- [ ] Database migration
+  - [ ] Add `role` column to `task_shares` (default: "editor" for backward compatibility)
+  - [ ] Add `assignee_id` FK to `tasks` (nullable, references `auth.users`)
+  - [ ] RLS: viewers can SELECT but not UPDATE; editors can UPDATE but not DELETE; owners have full control
+- [ ] UI
+  - [ ] ShareTaskView: multi-select contacts (add/remove collaborators, assign roles)
+  - [ ] Task detail: collaborator avatars row (tap to see names + roles)
+  - [ ] Assignment picker: "Who's responsible?" — select one assignee from collaborators
+  - [ ] Voice: "Share grocery list with Sarah and Mike" → creates multiple task_shares rows
+
+### Phase 2: Task Activity Log + Change Tracking
+
+- [ ] Data model
+  - [ ] `task_activity` table: `id`, `task_id`, `user_id`, `action` (created, updated, completed, commented, assigned, shared), `field_changed`, `old_value`, `new_value`, `created_at`
+  - [ ] Trigger or Edge Function: on task UPDATE, diff changed fields and insert activity rows per field
+  - [ ] Capture: title, due date, priority, category, notes, completion, assignment, progress, checklist items
+- [ ] Database migration
+  - [ ] Create `task_activity` table with FK to tasks and auth.users
+  - [ ] RLS: visible to all collaborators on the task (join through task_shares)
+  - [ ] Index on `(task_id, created_at)` for efficient timeline queries
+- [ ] UI: In-Task Activity Timeline
+  - [ ] ActivityTimelineView: scrollable log within task detail (below notes, above checklist)
+  - [ ] Each entry: avatar + "Sarah changed due date from Feb 14 to Feb 18" + timestamp
+  - [ ] Grouped by date (Today, Yesterday, Feb 10, etc.)
+  - [ ] "Seen by" indicators: dim entries the current user has already viewed
+- [ ] Sync
+  - [ ] SyncEngine: pull activity log for shared tasks on reconnect
+  - [ ] Realtime subscription on `task_activity` for live updates while viewing a task
+
+### Phase 3: AI-Summarized Changelog ("Catch-Up" View)
+
+- [ ] Edge Function: `summarize-task-activity`
+  - [ ] Input: activity rows since user's last seen timestamp for a given task
+  - [ ] Output: `{ summary: "Sarah moved the due date to Friday and added 3 checklist items. Mike marked it 60% complete.", details: [...] }`
+  - [ ] Model: gpt-4.1-mini (same as voice — fast, cheap, structured)
+  - [ ] Keep it short: 1-2 sentences max for the summary
+- [ ] UI: Catch-Up Card
+  - [ ] When user opens a task with unseen changes → show card at top of task detail
+  - [ ] Collapsed: AI summary (1-2 lines) + "N changes" badge
+  - [ ] Expanded (tap chevron): full activity timeline with before/after diffs per field
+  - [ ] "Mark as read" dismisses the card + updates last-seen timestamp
+  - [ ] Smooth expand/collapse animation (match ChatTaskCard pattern)
+- [ ] Data model
+  - [ ] `task_activity_seen`: `user_id`, `task_id`, `last_seen_at` — tracks per-user read position
+  - [ ] Unread count: `SELECT COUNT(*) FROM task_activity WHERE task_id = ? AND created_at > last_seen_at`
+
+### Phase 4: Morning Summary Digest
+
+- [ ] Edge Function: `daily-activity-digest`
+  - [ ] Input: all task_activity rows across user's shared tasks since last digest
+  - [ ] Output: grouped AI summary per task, sorted by most activity
+  - [ ] Example: "**Grocery list** — Sarah added 4 items. **Client proposal** — Mike changed due date to Monday and added notes."
+  - [ ] Trigger: Supabase cron job (pg_cron) or scheduled Edge Function, runs at user's preferred time
+- [ ] Digest preferences (ProfileView)
+  - [ ] Timing: Morning (8am), Evening (6pm), Real-time only, Off
+  - [ ] Store in `user_profiles`: `digest_preference` ("morning" | "evening" | "realtime" | "off")
+  - [ ] Timezone-aware scheduling
+- [ ] Delivery
+  - [ ] Push notification with summary preview (truncated)
+  - [ ] In-app: digest card at top of TaskListView (dismissible, "View all changes")
+  - [ ] Tap → opens digest detail with per-task expandable summaries
+
+### Phase 5: Comments + @Mentions
+
+- [ ] Data model
+  - [ ] `task_comments` table: `id`, `task_id`, `user_id`, `content`, `created_at`, `updated_at`
+  - [ ] `comment_mentions` table: `comment_id`, `mentioned_user_id` (for targeted notifications)
+  - [ ] RLS: visible to all task collaborators; only author can UPDATE/DELETE own comments
+- [ ] UI
+  - [ ] CommentsView: threaded discussion within task detail (between activity log and checklist)
+  - [ ] Compose bar: text field + send button at bottom of comments section
+  - [ ] @mention autocomplete: type "@" → show collaborator picker → inserts `@Sarah`
+  - [ ] Comment bubbles: avatar + name + content + relative timestamp
+- [ ] Notifications
+  - [ ] New comment → push to all collaborators (unless muted)
+  - [ ] @mention → push to mentioned user even if task is muted
+  - [ ] Activity log entry: "Sarah commented: 'Can we push this to next week?'"
+
+### Phase 6: Per-Task Notification Controls
+
+- [ ] Data model
+  - [ ] `task_notification_preferences`: `user_id`, `task_id`, `level` ("all" | "mentions" | "muted")
+  - [ ] Default: "all" — every change generates a notification
+  - [ ] "mentions" — only @mentions and assignment changes
+  - [ ] "muted" — no notifications (still visible in morning digest unless digest is off)
+- [ ] UI
+  - [ ] Bell icon in task detail header → tap to cycle: All → Mentions → Muted
+  - [ ] Visual indicator on muted tasks in list view (bell-slash icon)
+  - [ ] Notification center: filter by task, mark all read, bulk mute
+- [ ] Read receipts / "Seen by"
+  - [ ] When user views a task with changes, record `last_seen_at` in `task_activity_seen`
+  - [ ] Show "Seen by Sarah, Mike" subtle text below catch-up card (optional, default off)
+  - [ ] Profile toggle: "Show read receipts" (privacy-respecting, off by default)
+
+### Phase 7: Messaging Platform Integrations
+
+Deliver Docket notifications, digests, and task actions where teams already communicate. Webhook-based architecture supports Slack, Microsoft Teams, Discord, and generic webhooks (Zapier/Make/n8n).
+
+- [ ] Event system (foundation)
+  - [ ] `task_events` internal queue: task created, updated, completed, commented, assigned, shared — fires on every mutation
+  - [ ] Edge Function: `dispatch-integration-events` — reads events, fans out to connected integrations
+  - [ ] Deduplication + retry logic (idempotency key per event)
+  - [ ] Rate limiting per platform (Slack: 1 msg/sec/channel, Teams: similar)
+- [ ] Data model
+  - [ ] `user_integrations` table: `id`, `user_id`, `platform` ("slack" | "teams" | "discord" | "webhook"), `access_token`, `channel_id`, `config` (JSON), `created_at`
+  - [ ] `integration_rules` table: `id`, `integration_id`, `scope` ("all_tasks" | "category" | "project"), `scope_value`, `events` (array: which event types to forward)
+  - [ ] RLS: users can only see/manage their own integrations
+- [ ] Outgoing: Notifications to messaging platforms
+  - [ ] Task changes → Slack DM / Teams chat / Discord DM (based on user preference)
+  - [ ] @mention in Docket → DM to mentioned user on their connected platform
+  - [ ] Rich cards: Slack Block Kit, Teams Adaptive Cards, Discord embeds — show task title, due date, priority, action buttons
+  - [ ] Action buttons: "Mark Complete", "Snooze 1hr", "Open in Docket" (deep link)
+- [ ] Outgoing: Morning digest to channels
+  - [ ] AI daily summary → post to connected Slack channel / Teams channel / Discord channel
+  - [ ] Per-integration channel routing: user picks which channel gets the digest
+  - [ ] Same AI summary content as Phase 4, reformatted for platform (Block Kit, Adaptive Card, embed)
+- [ ] Incoming: Create/update tasks from messaging platforms
+  - [ ] Slash commands: `/docket add Call dentist tomorrow at 3pm` → creates task via Edge Function
+  - [ ] `/docket list` → shows today's tasks in ephemeral message
+  - [ ] `/docket done [task name]` → marks task complete
+  - [ ] Bot interaction: button clicks on rich cards trigger task actions (complete, snooze, assign)
+- [ ] OAuth + Setup
+  - [ ] ProfileView: "Connected Apps" section — Slack, Teams, Discord logos with connect/disconnect
+  - [ ] OAuth flow: Slack (Bot Token), Teams (Azure AD), Discord (Bot Token)
+  - [ ] Channel picker after auth: which channel for digest, which for all notifications
+  - [ ] Test connection: send a "Docket connected!" message on setup
+- [ ] Generic webhook (Zapier / Make / n8n)
+  - [ ] Outgoing webhook URL: user provides endpoint, Docket POSTs event JSON on task changes
+  - [ ] Payload format: `{ event, task, user, timestamp, changes }` — documented schema
+  - [ ] Webhook secret for signature verification (HMAC-SHA256)
+  - [ ] Enables any custom integration without platform-specific code
+- [ ] Voice integration
+  - [ ] "Send the grocery list to the family Slack channel" → posts task + checklist to connected channel
+  - [ ] "Notify Mike on Teams about the deadline change" → sends targeted DM via integration
+  - [ ] Edge Function prompt updated with integration awareness (available platforms per user)
+
+### V3 Design Decisions to Lock
+
+- **Conflict UX with multiple editors:** LWW still applies, but activity log shows "Sarah changed X while you were away" with old/new values — users can manually revert via edit. No merge UI (too complex for v3).
+- **AI summary cost:** ~$0.0005 per catch-up summary (few activity rows → tiny prompt). Daily digest slightly more. Acceptable at scale.
+- **Activity retention:** 90-day rolling window. Older entries archived/deleted. Keeps queries fast.
+- **Privacy:** Activity visible only to task collaborators. Read receipts opt-in. Digest content never leaves Supabase + Edge Function boundary.
+- **Integration architecture:** Webhook-first. Platform adapters are thin formatting layers over a shared event stream. Adding a new platform = new formatter, not new plumbing.
+- **Integration auth:** OAuth tokens stored encrypted in `user_integrations`. Refresh handled by Edge Function. Tokens never sent to client.
+
+---
 
 ## v1.3: Task Progress System
 
@@ -289,93 +350,35 @@ Full subtask support: each subtask is a full Task with title, due dates, priorit
 - [ ] Voice: saveTasks() + update handler apply progressTrackingDefault and progressPercentage
 - [ ] Shared tasks: Both users see and update progress; Realtime trigger propagates to recipient
 
+---
+
 ## Future / v2.0
 
-- [x] Voice-aware grocery lists
-  - [x] Send user's store names + template item counts as context to Edge Function
-  - [x] If grocery is the only ask -> "Do you have a specific store in mind?"
-  - [x] If user names a store with a template -> "You have a Costco template with 12 items. Want me to use it?"
-  - [x] If "yes" -> create task with checklist items from template (useTemplate field)
-  - [x] If "just a few items" -> create task with checklist items from AI-suggested names (checklistItems field)
-  - [x] ParsedTask extended with checklistItems and useTemplate fields
-  - [x] saveTasks() handles both template loading and ad-hoc item creation
-  - Foundation exists: GroceryStore templates, IngredientLibrary, checklist items all in SwiftData + Supabase
-- [x] Voice task updates and deletion
-  - [x] Send current task titles/IDs as context to Edge Function each call
-  - [x] New response types: "update" (modify existing task) and "delete" (remove task)
-  - [x] Support: "mark call mom as done", "move dentist to Thursday", "delete the client email"
-  - [x] iOS side: match task by title/ID in SwiftData, apply changes or delete
-  - [x] Context size: ~50 task titles fit easily in gpt-4.1-mini context window
-  - [x] Edge Function updated with task awareness in system prompt
-  - [x] TaskContext and TaskChanges models added
-  - [x] Update/delete handlers implemented in VoiceRecordingView
 - [ ] Widgets
 - [ ] Apple Watch app
 - [ ] Multiple languages for voice
 - [ ] App Store submission (see APP-STORE-GUIDE.md)
 
+---
+
 ## Technical Decisions Made
 
-### Voice UX Learnings (Feb 2026)
+See [.cursorrules](.cursorrules) and project docs. Key references:
 
-- **Live transcription → committed message flicker:** SwiftUI treats views with different `.id()` values as completely separate elements. When the live bubble had `.id("live")` and the committed message got `.id("msg-5")`, SwiftUI would animate one out and one in — even though they had identical text. Fix: use a unified `displayMessages` computed property where the live text gets `id: "msg-\(messages.count)"` — the same ID it will have once committed. SwiftUI sees it as one continuous view.
-- **SFSpeechRecognizer stale callbacks:** Calling `endAudio()` or `cancel()` on a recognition request triggers one final result callback on a background thread. That callback dispatches to MainActor and can overwrite `transcribedText` after the view already committed it to messages. Fix: `guard manager.isRecording else { return }` in the recognition handler — once stopped, all late callbacks are dropped.
-- **`.animation(.repeatForever)` doesn't restart:** SwiftUI's value-based `.animation(.repeatForever, value:)` only reliably starts on the first value change. When state cycles `.listening` → `.speaking` → `.listening`, the repeat animation doesn't restart. Fix: use `phaseAnimator([false, true], trigger: state)` which restarts the cycle on every trigger change.
-- **Audio level visualization:** Calculate RMS from each audio buffer on the IO thread (nonisolated), store in a class wrapper, poll with a MainActor task at ~12fps using exponential moving average (0.3 old + 0.7 new) for smooth visual feedback.
-- **ScrollView auto-scroll:** Remove `withAnimation` from scroll onChange handlers — it animates the content insert/remove, not just the scroll. Use `DispatchQueue.main.async { scrollProxy.scrollTo("bottom") }` so the layout commits first.
-- **GeometryReader for bottom-anchored chat:** Wrap ScrollView content in `.frame(minHeight: geometry.size.height, alignment: .bottom)` so messages anchor to the bottom when there are few messages (like iMessage), rather than floating at the top.
-- **Latency split (client vs function):** Keep deterministic control intents on-device (dismiss/thanks/session-control) and reserve Edge Function calls for semantic task parsing (`question/complete/update/delete`) to avoid unnecessary round-trips.
+- **Voice UX Learnings:** `.cursorrules` § Voice UX Patterns
+- **Personalization Methodology:** `.cursorrules` § Personalization Adaptation Guidelines
+- **Voice Architecture:** [VOICE-TO-TASK-V2.md](VOICE-TO-TASK-V2.md)
+- **Cloud Architecture:** Supabase (PostgreSQL + Auth + Realtime), bi-directional sync, offline queue
 
-### Personalization Methodology (v1.2)
-
-- **Learn from corrections, not assumptions:** only learn when users explicitly edit AI output
-- **Prioritize high-signal fields first:** title vocabulary, category mapping, store aliases, time habits
-- **Keep context compact:** send top ranked mappings by recency/frequency, not full history
-- **Ship behind guardrails:** opt-in controls, retention limits, reset button, and no raw audio storage
-- **Measure quality with behavior:** success = fewer post-voice edits + faster confirmation, not just model confidence
-
-### Voice Architecture (v1.1) — Updated 2026-02-08
-
-- **Mode:** Conversational multi-turn (AI asks follow-ups when info is missing)
-- **Transcription:** Apple SFSpeechRecognizer (on-device, free, fast) with optional Whisper API fallback (better accent accuracy)
-- **Parsing:** gpt-4.1-mini via OpenRouter -> Supabase Edge Function
-- **Conversation state:** messages[] array managed on iOS, Edge Function is stateless
-- **Extraction:** Title, due date (with optional time), priority, category, notes, share target, recurrence (daily/weekly/monthly)
-- **Confirmation:** TTS readback (AVSpeechSynthesizer, on-device) + auto-save if no "?" in summary
-- **Continuation:** "Anything else?" after each task — user can chain multiple tasks in one session
-- **Corrections:** Supported mid-conversation ("actually make it Wednesday") — user can correct after AI returns tasks
-- **Sharing:** AI extracts share intent from speech, resolved via contacts cache
-- **Language:** English only for v1.1
-- **Model:** gpt-4.1-mini (fast, structured output, ~$0.001/turn) — NOT a thinking model
-- **Orchestrator:** Not needed — conversation loop is ~15 lines of Swift, no LangChain/LangGraph
-- **Dependencies:** Zero new installs (all Apple frameworks + Deno fetch)
-- **Cost estimate:** ~$8/month @ 100 users (avg 3 turns per task) + ~$15/month for Whisper @ 100 users (5 tasks/day)
-- **Edge Function auth:** verify_jwt disabled at gateway; function validates via getUser() (Swift SDK JWT format incompatible with gateway's strict check)
-- **Silence detection:** Adaptive timeout — 2.2s baseline, 2.8s for ongoing dictation
-- **Error handling:** Network checks, empty transcription detection, AI failure recovery with TTS feedback
-- **Loading states:** Animated processing indicators, pulsing mic button
-- **Haptics:** Light impact on start recording, success notification on task save, error notification on failures
-- **Conversation timeout:** Auto-dismiss after 60s idle with TTS message
-- **Swift 6:** See SWIFT6-CONCURRENCY-GUIDE.md for all concurrency fixes
-
-### Cloud Architecture (v1.0)
-
-- **Backend:** Supabase (PostgreSQL + Auth + Realtime)
-- **Sync:** Bi-directional with offline queue
-- **Auth:** Apple Sign In + email/password
-- **Notifications:** Local notifications for due dates
-
-## Research Completed
-
-- [x] Voice-to-text options (Apple Speech vs Whisper)
-- [x] Audio streaming architecture
-- [x] WebSocket gateway patterns (for v1.1)
-- [x] NLU approaches for task extraction
-- [x] Supabase sync strategies
-- See [VOICE-TO-TASK-PLAN.md](VOICE-TO-TASK-PLAN.md) for voice details
+---
 
 ## Next Steps
 
-1. Phase 11: Advanced subtasks (unlimited nesting, voice + manual — see Phase 11 above)
-2. App Store submission (see APP-STORE-GUIDE.md)
-3. See [VOICE-TO-TASK-V2.md](VOICE-TO-TASK-V2.md) for full architecture
+1. Phase 10 metrics dashboard (edit-after-voice rate, personalization hit rate)
+2. Phase 11: Inline task cards in voice chat
+3. Phase 12: Advanced subtasks (unlimited nesting, voice + manual)
+4. Sharing V2 Phase 6: QA verification matrix
+5. **Sharing V3:** Multi-person collaboration + activity intelligence (see above)
+6. App Store submission (see APP-STORE-GUIDE.md)
+7. **Phase 13:** Unified AI Command Bar (see [UNIFIED-AI-COMMAND-BAR.md](UNIFIED-AI-COMMAND-BAR.md))
+8. **Product roadmap priorities:** Today view, Widgets, Flexible reminders, Calendar view (see [PRODUCT-ROADMAP.md](PRODUCT-ROADMAP.md))
