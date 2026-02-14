@@ -1,6 +1,10 @@
 import SwiftUI
 
-/// A reusable message bubble component for conversation UI
+// MARK: - Message Bubble
+
+/// A message bubble view for conversation display
+/// User bubbles are blue and right-aligned
+/// Assistant bubbles are gray and left-aligned
 struct MessageBubble: View {
     let message: ConversationMessage
     
@@ -32,11 +36,10 @@ struct MessageBubble: View {
 // MARK: - Preview
 
 #Preview("Message Bubbles") {
-    VStack(spacing: 16) {
-        MessageBubble(message: ConversationMessage(role: "user", content: "Buy groceries for dinner tonight"))
-        MessageBubble(message: ConversationMessage(role: "assistant", content: "I've created a task to buy groceries for dinner tonight."))
-        MessageBubble(message: ConversationMessage(role: "user", content: "What time?"))
-        MessageBubble(message: ConversationMessage(role: "assistant", content: "You didn't specify a time. Would you like to add one?"))
+    VStack(spacing: 12) {
+        MessageBubble(message: ConversationMessage(role: "user", content: "Buy groceries for dinner"))
+        MessageBubble(message: ConversationMessage(role: "assistant", content: "When do you need to get groceries?"))
+        MessageBubble(message: ConversationMessage(role: "user", content: "Tomorrow at 5pm"))
     }
     .padding()
 }

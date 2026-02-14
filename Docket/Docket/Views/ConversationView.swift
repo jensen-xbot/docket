@@ -1,109 +1,157 @@
 import SwiftUI
 
-/// Chat UI for low-confidence interactions
-/// Displays messages in a scrollable list with a bottom input bar
+// MARK: - Conversation View
+
+/// Displays a conversation with message bubbles, scroll view,
+/// and a bottom text input area with voice button
 struct ConversationView: View {
-    @Binding var messages: [ConversationMessage]
-    @Binding var inputText: String
-    var onSubmit: (String) -> Void
+    let messages: [ConversationMessage]
+    let isProcessing: Bool
+    var onSend: (String) -> Void
     var onVoiceTap: () -> Void
     
-    @FocusState private var isInputFocused: Bool
-    @State private var scrollProxy: ScrollViewProxy?
+    @State private var inputText: String = ""
+    @State private var isTextFieldFocused: Bool = false
+    @FocusState private var textFieldFocused: Bool
     
     var body: some View {
         VStack(spacing: 0) {
-            // Messages scroll view
-            ScrollViewReader { proxy in
+            // Message list
+            ScrollViewReader { scrollProxy in
                 ScrollView {
-                    LazyVStack(spacing: 12) {
-                        Spacer(minLength: 20)
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 0)
                         
-                        ForEach(Array(messages.enumerated()), id: \.offset) { index, message in
-                            MessageBubble(message: message)
-                                .id(index)
+                        VStack(spacing: 12) {
+                            // Display messages
+                            ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
+                                MessageBubble(message: message)
+                                    .id("msg-\(index)")
+                            }
+                            
+                            // Processing indicator
+                            if isProcessing {
+                                AIThinkingIndicator(label: "Thinking...")
+                                    .padding(.vertical, 4)
+                                    .id("processing")
+                            }
+                            
+                            // Bottom anchor for scrolling
+                            Color.clear
+                                .frame(height: 1)
+                                .id("bottom")
                         }
-                        
-                        // Bottom anchor for scrolling
-                        Color.clear
-                            .frame(height: 1)
-                            .id("bottom")
+                        .padding(.horizontal)
+                        .padding(.vertical, 8)
                     }
-                    .padding(.horizontal)
+                    .frame(minHeight: UIScreen.main.bounds.height * 0.5, alignment: .bottom)
                 }
                 .onChange(of: messages.count) { _, _ in
-                    scrollToBottom(proxy: proxy)
-                }
-                .onChange(of: inputText) { _, _ in
-                    // Keep scrolled to bottom while typing
-                    if !inputText.isEmpty {
-                        scrollToBottom(proxy: proxy)
+                    DispatchQueue.main.async {
+                        scrollProxy.scrollTo("bottom", anchor: .bottom)
                     }
                 }
-                .onAppear {
-                    scrollProxy = proxy
-                    scrollToBottom(proxy: proxy)
+                .onChange(of: isProcessing) { _, _ in
+                    DispatchQueue.main.async {
+                        scrollProxy.scrollTo("bottom", anchor: .bottom)
+                    }
                 }
             }
             
-            // Bottom input bar
-            inputBar
-        }
-    }
-    
-    private var inputBar: some View {
-        HStack(spacing: 12) {
-            // Voice button
-            Button(action: onVoiceTap) {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.blue)
-                    .frame(width: 36, height: 36)
-                    .background(Color.blue.opacity(0.1))
-                    .clipShape(Circle())
-            }
-            .buttonStyle(.plain)
-            
-            // Text input
-            TextField("Type a message...", text: $inputText, axis: .vertical)
-                .focused($isInputFocused)
-                .textFieldStyle(.plain)
-                .lineLimit(1...5)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background(Color(.systemGray6))
-                .clipShape(RoundedRectangle(cornerRadius: 20))
-            
-            // Send button (only when has text)
-            if !inputText.isEmpty {
-                Button(action: submitText) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 28))
-                        .foregroundStyle(.blue)
+            // Bottom input area
+            VStack(spacing: 0) {
+                Divider()
+                
+                HStack(spacing: 12) {
+                    // Text input field
+                    TextField("Type a message...", text: $inputText, axis: .vertical)
+                        .font(.body)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(20)
+                        .lineLimit(1...5)
+                        .focused($textFieldFocused)
+                        .submitLabel(.send)
+                        .onSubmit {
+                            sendMessage()
+                        }
+                    
+                    // Send or Voice button
+                    Button(action: {
+                        if inputText.isEmpty {
+                            onVoiceTap()
+                        } else {
+                            sendMessage()
+                        }
+                    }) {
+                        ZStack {
+                            // Voice icon (shown when empty)
+                            Image(systemName: "waveform")
+                                .font(.system(size: 22, weight: .medium))
+                                .foregroundStyle(inputText.isEmpty ? .blue : .clear)
+                                .opacity(inputText.isEmpty ? 1 : 0)
+                            
+                            // Submit icon (shown when has text)
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 28))
+                                .foregroundStyle(!inputText.isEmpty ? .blue : .clear)
+                                .opacity(!inputText.isEmpty ? 1 : 0)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .animation(.easeInOut(duration: 0.2), value: inputText.isEmpty)
                 }
-                .buttonStyle(.plain)
-                .transition(.scale.combined(with: .opacity))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(Color(.systemBackground))
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(Color(.systemBackground))
     }
     
-    private func submitText() {
+    private func sendMessage() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         
-        onSubmit(text)
         inputText = ""
+        textFieldFocused = false
+        onSend(text)
     }
+}
+
+// MARK: - AI Thinking Indicator
+
+struct AIThinkingIndicator: View {
+    let label: String
+    @State private var isAnimating = false
     
-    private func scrollToBottom(proxy: ScrollViewProxy) {
-        DispatchQueue.main.async {
-            withAnimation(.easeOut(duration: 0.2)) {
-                proxy.scrollTo("bottom", anchor: .bottom)
+    var body: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 6) {
+                ForEach(0..<3, id: \.self) { index in
+                    Circle()
+                        .fill(Color.blue)
+                        .frame(width: 8, height: 8)
+                        .opacity(isAnimating ? 1.0 : 0.25)
+                        .scaleEffect(isAnimating ? 1.0 : 0.7)
+                        .animation(
+                            .easeInOut(duration: 0.55)
+                                .repeatForever(autoreverses: true)
+                                .delay(Double(index) * 0.14),
+                            value: isAnimating
+                        )
+                }
             }
+            Text(label)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(Color(.systemGray6))
+        .clipShape(Capsule())
+        .onAppear { isAnimating = true }
+        .onDisappear { isAnimating = false }
     }
 }
 
@@ -112,43 +160,26 @@ struct ConversationView: View {
 #Preview("Conversation View") {
     struct PreviewWrapper: View {
         @State private var messages: [ConversationMessage] = [
-            ConversationMessage(role: "user", content: "Call mom tomorrow"),
-            ConversationMessage(role: "assistant", content: "What time would you like to call your mom?")
+            ConversationMessage(role: "user", content: "Buy groceries for dinner"),
+            ConversationMessage(role: "assistant", content: "When do you need to get groceries?"),
+            ConversationMessage(role: "user", content: "Tomorrow at 5pm")
         ]
-        @State private var inputText = ""
+        @State private var isProcessing = false
         
         var body: some View {
             ConversationView(
-                messages: $messages,
-                inputText: $inputText,
-                onSubmit: { text in
+                messages: messages,
+                isProcessing: isProcessing,
+                onSend: { text in
                     messages.append(ConversationMessage(role: "user", content: text))
+                    isProcessing = true
+                    // Simulate response
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        isProcessing = false
+                        messages.append(ConversationMessage(role: "assistant", content: "Got it! I'll remind you to buy groceries tomorrow at 5pm."))
+                    }
                 },
-                onVoiceTap: {
-                    print("Voice tapped")
-                }
-            )
-        }
-    }
-    
-    return PreviewWrapper()
-}
-
-#Preview("Empty Conversation") {
-    struct PreviewWrapper: View {
-        @State private var messages: [ConversationMessage] = []
-        @State private var inputText = ""
-        
-        var body: some View {
-            ConversationView(
-                messages: $messages,
-                inputText: $inputText,
-                onSubmit: { text in
-                    messages.append(ConversationMessage(role: "user", content: text))
-                },
-                onVoiceTap: {
-                    print("Voice tapped")
-                }
+                onVoiceTap: {}
             )
         }
     }
