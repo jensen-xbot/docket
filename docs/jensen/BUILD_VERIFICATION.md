@@ -17,7 +17,7 @@
 ---
 
 ## Module 1: Wire confidence routing in handleCommandSubmit
-**Commit:** TBD  
+**Commit:** bf93042  
 **New .swift files:** None (modifications only)  
 **Modified .swift files:**
 - `Docket/Docket/Views/TaskListView.swift` — wire VoiceTaskParser, confidence routing

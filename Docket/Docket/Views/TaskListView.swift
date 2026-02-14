@@ -71,11 +71,14 @@ struct TaskListView: View {
     // MARK: - Confidence Flow State
     @State private var showingQuickAcceptToast = false
     @State private var showingInlineConfirmation = false
+    @State private var showingInlineEdit = false
+    @State private var parsedTaskToEdit: ParsedTask?
     @State private var showingCommandBarExpanded = false
     @State private var lastParsedTasks: [ParsedTask] = []
     @State private var lastParseResponse: ParseResponse?
     @State private var parser = VoiceTaskParser()
     @State private var conversationMessages: [ConversationMessage] = []
+    @State private var isProcessingConversation = false
     
     // MARK: - Grocery Stores (for templates)
     @Query(sort: \GroceryStore.name) private var groceryStores: [GroceryStore]
@@ -127,17 +130,41 @@ struct TaskListView: View {
                                 viewModel.searchText = ""
                             },
                             onEdit: {
-                                // Open expanded mode for editing
+                                // Open inline edit mode
                                 showingInlineConfirmation = false
-                                conversationMessages = [
-                                    ConversationMessage(role: "user", content: "Create task: \(task.title)"),
-                                    ConversationMessage(role: "assistant", content: "What would you like to change?")
-                                ]
-                                showingCommandBarExpanded = true
+                                parsedTaskToEdit = task
+                                showingInlineEdit = true
                             },
                             onCancel: {
                                 showingInlineConfirmation = false
                                 lastParsedTasks = []
+                            }
+                        )
+                        .padding(.bottom, 80)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                
+                // Inline Edit Card (medium confidence → edit)
+                if showingInlineEdit, var task = parsedTaskToEdit {
+                    VStack {
+                        Spacer()
+                        InlineTaskEditView(
+                            task: Binding(
+                                get: { task },
+                                set: { parsedTaskToEdit = $0 }
+                            ),
+                            onSave: {
+                                if let finalTask = parsedTaskToEdit {
+                                    saveParsedTasks([finalTask])
+                                }
+                                showingInlineEdit = false
+                                parsedTaskToEdit = nil
+                                viewModel.searchText = ""
+                            },
+                            onCancel: {
+                                showingInlineEdit = false
+                                parsedTaskToEdit = nil
                             }
                         )
                         .padding(.bottom, 80)
