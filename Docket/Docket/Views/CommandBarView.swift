@@ -97,7 +97,9 @@ struct VoiceButton: View {
 struct CommandBarCollapsed: View {
     @Binding var text: String
     @Binding var isFocused: Bool
+    var placeholder: String = "What do you need to get done?"
     var onVoiceTap: () -> Void
+    var onSubmit: () -> Void
     var onPlusLongPress: () -> Void
     
     @State private var showingContextMenu: Bool = false
@@ -111,11 +113,17 @@ struct CommandBarCollapsed: View {
             GrowingTextField(
                 text: $text,
                 isFocused: $isFocused,
-                placeholder: "What do you need to get done?"
+                placeholder: placeholder
             )
             
             // Voice/Submit button
-            VoiceButton(hasText: !text.isEmpty, onTap: onVoiceTap)
+            VoiceButton(hasText: !text.isEmpty, onTap: {
+                if text.isEmpty {
+                    onVoiceTap()
+                } else {
+                    onSubmit()
+                }
+            })
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 12)
@@ -150,15 +158,20 @@ struct CommandBarCollapsed: View {
 // MARK: - Command Bar View (Container)
 
 struct CommandBarView: View {
-    @State private var text: String = ""
-    @State private var isFocused: Bool = false
-    @State private var showingContextMenu: Bool = false
+    @Binding var text: String
+    @Binding var isFocused: Bool
+    @Binding var showingContextMenu: Bool
+    var onVoiceTap: () -> Void
+    var onSubmit: () -> Void
+    var placeholder: String = "What do you need to get done?"
     
     var body: some View {
         CommandBarCollapsed(
             text: $text,
             isFocused: $isFocused,
-            onVoiceTap: handleVoiceTap,
+            placeholder: placeholder,
+            onVoiceTap: onVoiceTap,
+            onSubmit: onSubmit,
             onPlusLongPress: {
                 showingContextMenu = true
             }
@@ -220,35 +233,54 @@ struct CommandBarView: View {
             }
         )
     }
-    
-    private func handleVoiceTap() {
-        if text.isEmpty {
-            // Start voice recording
-        } else {
-            // Submit task
-        }
-    }
 }
 
 // MARK: - Preview
 
 #Preview("Command Bar - Empty") {
-    VStack {
-        Spacer()
-        CommandBarView()
+    struct PreviewWrapper: View {
+        @State private var text = ""
+        @State private var isFocused = false
+        @State private var showingMenu = false
+        
+        var body: some View {
+            VStack {
+                Spacer()
+                CommandBarView(
+                    text: $text,
+                    isFocused: $isFocused,
+                    showingContextMenu: $showingMenu,
+                    onVoiceTap: {},
+                    onSubmit: {}
+                )
+            }
+            .background(Color(.systemGroupedBackground))
+        }
     }
-    .background(Color(.systemGroupedBackground))
+    return PreviewWrapper()
 }
 
 #Preview("Command Bar - With Text") {
-    VStack {
-        Spacer()
-        CommandBarView()
-            .onAppear {
-                // Simulate text entry for preview
+    struct PreviewWrapper: View {
+        @State private var text = "Buy groceries for dinner tonight"
+        @State private var isFocused = false
+        @State private var showingMenu = false
+        
+        var body: some View {
+            VStack {
+                Spacer()
+                CommandBarView(
+                    text: $text,
+                    isFocused: $isFocused,
+                    showingContextMenu: $showingMenu,
+                    onVoiceTap: {},
+                    onSubmit: {}
+                )
             }
+            .background(Color(.systemGroupedBackground))
+        }
     }
-    .background(Color(.systemGroupedBackground))
+    return PreviewWrapper()
 }
 
 #Preview("Command Bar States") {
