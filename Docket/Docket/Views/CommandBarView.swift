@@ -301,6 +301,7 @@ struct CommandBarView: View {
                         text: $emptyText,
                         isFocused: $isFocused1,
                         onVoiceTap: {},
+                        onSubmit: {},
                         onPlusLongPress: {}
                     )
                 }
@@ -314,6 +315,7 @@ struct CommandBarView: View {
                         text: $filledText,
                         isFocused: $isFocused2,
                         onVoiceTap: {},
+                        onSubmit: {},
                         onPlusLongPress: {}
                     )
                 }
