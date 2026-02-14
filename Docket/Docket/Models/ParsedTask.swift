@@ -1,5 +1,27 @@
 import Foundation
 
+/// Represents the confidence level of a parsed task from the AI
+/// - high: Explicit title + explicit date + no share target
+/// - medium: Vague title OR inferred priority OR relative date OR share target
+/// - low: Missing title OR missing date (required for complete)
+enum ConfidenceLevel: String, Codable, CaseIterable {
+    case high
+    case medium
+    case low
+    
+    /// Returns a user-friendly display name for the confidence level
+    var displayName: String {
+        switch self {
+        case .high: return "High"
+        case .medium: return "Medium"
+        case .low: return "Low"
+        }
+    }
+    
+    /// Returns the default confidence level for backward compatibility
+    static var `default`: ConfidenceLevel { .medium }
+}
+
 struct ParsedTask: Codable, Identifiable {
     let id: UUID
     var title: String
@@ -51,6 +73,51 @@ struct ParseResponse: Codable {
     let taskId: String? // existing task ID (when type == "update" or "delete")
     let changes: TaskChanges? // fields to change (when type == "update")
     let summary: String? // TTS readback (when type == "complete", "update", or "delete")
+    let confidence: ConfidenceLevel? // AI confidence in the parsing result (nil for backward compatibility)
+    
+    /// Returns the effective confidence level, defaulting to .medium for backward compatibility
+    var effectiveConfidence: ConfidenceLevel {
+        confidence ?? .medium
+    }
+    
+    /// Returns true if the confidence level is high (suitable for auto-accept)
+    var isHighConfidence: Bool {
+        effectiveConfidence == .high
+    }
+    
+    /// Returns true if the confidence level is medium (requires inline confirmation)
+    var isMediumConfidence: Bool {
+        effectiveConfidence == .medium
+    }
+    
+    /// Returns true if the confidence level is low (requires expanded conversation)
+    var isLowConfidence: Bool {
+        effectiveConfidence == .low
+    }
+}
+
+// MARK: - ParseResponse Coding Keys
+extension ParseResponse {
+    enum CodingKeys: String, CodingKey {
+        case type
+        case text
+        case tasks
+        case taskId
+        case changes
+        case summary
+        case confidence
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        type = try container.decode(String.self, forKey: .type)
+        text = try container.decodeIfPresent(String.self, forKey: .text)
+        tasks = try container.decodeIfPresent([ParsedTask].self, forKey: .tasks)
+        taskId = try container.decodeIfPresent(String.self, forKey: .taskId)
+        changes = try container.decodeIfPresent(TaskChanges.self, forKey: .changes)
+        summary = try container.decodeIfPresent(String.self, forKey: .summary)
+        confidence = try container.decodeIfPresent(ConfidenceLevel.self, forKey: .confidence)
+    }
 }
 
 /// Context about an existing task, sent to Edge Function for awareness
