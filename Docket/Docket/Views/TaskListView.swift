@@ -75,6 +75,10 @@ struct TaskListView: View {
     @State private var lastParsedTasks: [ParsedTask] = []
     @State private var lastParseResponse: ParseResponse?
     @State private var parser = VoiceTaskParser()
+    @State private var conversationMessages: [ConversationMessage] = []
+    
+    // MARK: - Grocery Stores (for templates)
+    @Query(sort: \GroceryStore.name) private var groceryStores: [GroceryStore]
     
     private var filteredTasks: [Task] {
         viewModel.filteredTasks(from: allTasks)
@@ -125,6 +129,10 @@ struct TaskListView: View {
                             onEdit: {
                                 // Open expanded mode for editing
                                 showingInlineConfirmation = false
+                                conversationMessages = [
+                                    ConversationMessage(role: "user", content: "Create task: \(task.title)"),
+                                    ConversationMessage(role: "assistant", content: "What would you like to change?")
+                                ]
                                 showingCommandBarExpanded = true
                             },
                             onCancel: {
@@ -135,6 +143,25 @@ struct TaskListView: View {
                         .padding(.bottom, 80)
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                
+                // Expanded Command Bar (low confidence / conversation)
+                if showingCommandBarExpanded {
+                    CommandBarExpanded(
+                        isExpanded: $showingCommandBarExpanded,
+                        messages: $conversationMessages,
+                        inputText: $viewModel.searchText,
+                        onSend: { messageText in
+                            handleConversationReply(messageText)
+                        },
+                        onVoiceTap: {
+                            // Voice mode will be implemented in Module 4
+                        },
+                        onClose: {
+                            showingCommandBarExpanded = false
+                            conversationMessages = []
+                        }
+                    )
                 }
             }
             .navigationTitle("Docket")
@@ -536,6 +563,7 @@ struct TaskListView: View {
     
     private func handleCommandSubmit(_ text: String, completion: @escaping (ParseResponse) -> Void) {
         Task {
+            // Initialize conversation with first message
             let messages = [ConversationMessage(role: "user", content: text)]
             
             do {
@@ -564,6 +592,18 @@ struct TaskListView: View {
                         
                     case .low:
                         // Expand for conversation
+                        self.conversationMessages = [
+                            ConversationMessage(role: "user", content: text)
+                        ]
+                        if let summary = response.summary {
+                            self.conversationMessages.append(
+                                ConversationMessage(role: "assistant", content: summary)
+                            )
+                        } else if let questionText = response.text {
+                            self.conversationMessages.append(
+                                ConversationMessage(role: "assistant", content: questionText)
+                            )
+                        }
                         self.showingCommandBarExpanded = true
                     }
                     
@@ -583,7 +623,82 @@ struct TaskListView: View {
                     confidence: .low
                 )
                 await MainActor.run {
+                    self.conversationMessages = [
+                        ConversationMessage(role: "user", content: text),
+                        ConversationMessage(role: "assistant", content: errorResponse.text ?? "I didn't understand that. Could you rephrase?")
+                    ]
+                    self.showingCommandBarExpanded = true
                     completion(errorResponse)
+                }
+            }
+        }
+    }
+    
+    private func handleConversationReply(_ text: String) {
+        Task {
+            // Add user message to conversation
+            conversationMessages.append(ConversationMessage(role: "user", content: text))
+            
+            do {
+                let response = try await parser.send(messages: conversationMessages)
+                await MainActor.run {
+                    self.lastParseResponse = response
+                    
+                    switch response.type {
+                    case "complete":
+                        if let tasks = response.tasks {
+                            self.lastParsedTasks = tasks
+                            
+                            switch response.effectiveConfidence {
+                            case .high:
+                                // Auto-save and close
+                                self.saveParsedTasks(tasks)
+                                self.showingCommandBarExpanded = false
+                                self.conversationMessages = []
+                                self.showingQuickAcceptToast = true
+                                
+                            case .medium:
+                                // Show inline confirmation (close expanded first)
+                                self.showingCommandBarExpanded = false
+                                self.showingInlineConfirmation = true
+                                
+                            case .low:
+                                // Continue conversation
+                                if let summary = response.summary {
+                                    self.conversationMessages.append(
+                                        ConversationMessage(role: "assistant", content: summary)
+                                    )
+                                }
+                            }
+                        }
+                        
+                    case "question":
+                        // Continue conversation with question
+                        if let questionText = response.text {
+                            self.conversationMessages.append(
+                                ConversationMessage(role: "assistant", content: questionText)
+                            )
+                        }
+                        
+                    default:
+                        // Handle other response types
+                        if let summary = response.summary {
+                            self.conversationMessages.append(
+                                ConversationMessage(role: "assistant", content: summary)
+                            )
+                        } else if let text = response.text {
+                            self.conversationMessages.append(
+                                ConversationMessage(role: "assistant", content: text)
+                            )
+                        }
+                    }
+                }
+            } catch {
+                print("Conversation parse error: \(error)")
+                await MainActor.run {
+                    self.conversationMessages.append(
+                        ConversationMessage(role: "assistant", content: "Sorry, I had trouble processing that. Could you try again?")
+                    )
                 }
             }
         }
@@ -609,6 +724,48 @@ struct TaskListView: View {
                     notes: parsedTask.notes,
                     syncStatus: .pending
                 )
+                task.taskSource = "command_bar"
+                task.voiceSnapshotData = try? JSONEncoder().encode(parsedTask.toVoiceSnapshot())
+                
+                // Handle checklist items / templates
+                if let templateName = parsedTask.useTemplate {
+                    // Load items from grocery store template
+                    if let store = groceryStores.first(where: { $0.name.localizedCaseInsensitiveContains(templateName) }) {
+                        let items = store.items.enumerated().map { index, name in
+                            ChecklistItem(
+                                id: UUID(),
+                                name: name,
+                                isChecked: false,
+                                sortOrder: index,
+                                quantity: 1,
+                                isStarred: false
+                            )
+                        }
+                        task.checklistItems = items
+                    }
+                } else if let itemNames = parsedTask.checklistItems, !itemNames.isEmpty {
+                    // Create checklist items from AI-suggested names
+                    let items = itemNames.enumerated().map { index, name in
+                        let capitalizedName = name.split(separator: " ")
+                            .map { $0.prefix(1).uppercased() + $0.dropFirst().lowercased() }
+                            .joined(separator: " ")
+                        return ChecklistItem(
+                            id: UUID(),
+                            name: capitalizedName,
+                            isChecked: false,
+                            sortOrder: index,
+                            quantity: 1,
+                            isStarred: false
+                        )
+                    }
+                    task.checklistItems = items
+                }
+                
+                // Handle sharing
+                if let shareWith = parsedTask.shareWith, !shareWith.isEmpty {
+                    task.shareWith = shareWith
+                    // Share resolution happens in sync or background
+                }
                 
                 modelContext.insert(task)
                 
