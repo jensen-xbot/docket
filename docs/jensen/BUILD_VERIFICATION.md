@@ -32,7 +32,7 @@
 ---
 
 ## Module 2: Inline edit mode for medium confidence
-**Commit:** TBD  
+**Commit:** 09a29f5  
 **New .swift files:**
 - `Docket/Docket/Views/InlineTaskEditView.swift` — Editable task card with title, date, priority, category
 **Modified .swift files:**

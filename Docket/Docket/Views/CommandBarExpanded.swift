@@ -8,12 +8,12 @@ struct CommandBarExpanded: View {
     @Binding var isExpanded: Bool
     @Binding var messages: [ConversationMessage]
     @Binding var inputText: String
+    var isProcessing: Bool = false
     var onSend: (String) -> Void
     var onVoiceTap: () -> Void
     var onClose: () -> Void
     
     @State private var dragOffset: CGFloat = 0
-    @State private var isProcessing: Bool = false
     
     var body: some View {
         ZStack {

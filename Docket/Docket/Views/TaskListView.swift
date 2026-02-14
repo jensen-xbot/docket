@@ -178,6 +178,7 @@ struct TaskListView: View {
                         isExpanded: $showingCommandBarExpanded,
                         messages: $conversationMessages,
                         inputText: $viewModel.searchText,
+                        isProcessing: isProcessingConversation,
                         onSend: { messageText in
                             handleConversationReply(messageText)
                         },
@@ -662,7 +663,9 @@ struct TaskListView: View {
     }
     
     private func handleConversationReply(_ text: String) {
+        isProcessingConversation = true
         Task {
+            defer { isProcessingConversation = false }
             // Add user message to conversation
             conversationMessages.append(ConversationMessage(role: "user", content: text))
             
