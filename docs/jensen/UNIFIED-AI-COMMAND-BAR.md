@@ -2,7 +2,7 @@
 
 One input, three modes (voice, text, +), same conversation backend. Replaces search, toolbar mic, and toolbar "+" with a single bottom-positioned command bar that expands into the full conversation view.
 
-*Created: 2026-02*
+_Created: 2026-02_
 
 ---
 
@@ -11,10 +11,11 @@ One input, three modes (voice, text, +), same conversation backend. Replaces sea
 The **Unified AI Command Bar** (user-facing: "Ask Docket") is Docket's primary interaction surface. Users type or speak to create tasks, find tasks, or ask the AI anything. The bar lives at the bottom of the task list, expands gracefully into a full conversation view on submit (text) or mic tap (voice), and supports mid-conversation switching between voice and text.
 
 **Design philosophy:**
+
 - One entry point — no separate mic button, no separate "+" in toolbar
-- Search is implicit in text mode — tasks filter live as you type (always-on, no toggle)
+- Search is separate — toolbar magnifying glass toggles `.searchable`; command bar has its own internal text (decoupled)
 - Same `parse-voice-tasks` Edge Function for both text and voice input
-- Conversation view is shared — chat bubbles, task cards, follow-up flow identical
+- Conversation view is shared — chat bubbles, ChatTaskCard for confirmation, follow-up flow identical
 
 ---
 
@@ -32,31 +33,29 @@ The **Unified AI Command Bar** (user-facing: "Ask Docket") is Docket's primary i
 └─────────────────────────────────────────────────────────────┘
 ```
 
-- **(+)** on left: long-press for context menu ("Manual Task", "Attach Picture")
+- **(+)** on left: tap opens AddTaskView; long-press for context menu ("Manual Task", "Attach Picture")
 - Placeholder centered: "Ask Docket anything..."
 - **5-bars icon** on right: tap for voice mode (replaces submit arrow when field is empty)
 - Bottom-positioned, persistent in TaskListView via `.safeAreaInset(edge: .bottom)`
-- Toolbar above task list: filter, bell, profile only (no mic, no +)
+- Toolbar above task list: filter, search (magnifying glass), bell, profile only (no mic, no +)
 
 ### Text Mode (Tap Field)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Task list — filtered live as user types                     │
-│  (single-line: results prominent; multi-line: results dim)   │
+│  Task list                                                   │
+│  (Search: pull down from nav bar or tap magnifying glass)   │
 │  ...                                                        │
 ├─────────────────────────────────────────────────────────────┤
-│  [ (+) ]  "grocery |"               [ 🔍 ]  [ ↑ ]          │
-│  (iOS dictation mic appears in keyboard — standard, small)   │
+│  [ (+) ]  "grocery |"               [ ||||| ]  [ ↑ ]        │
+│  (Command bar text is separate from search)                  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-- Keyboard rises, 5-bars morphs to submit arrow (crossfade ~0.2s)
-- Magnifying glass indicator appears (blue = filtering active, auto-on)
-- Tasks filter live in background as user types
+- Search: `.searchable` modifier on NavigationStack — pull down or tap magnifying glass
+- Command bar has its own internal text state (decoupled from search)
+- Keyboard rises, 5-bars morphs to submit arrow when field has text
 - Field grows vertically like iMessage for multi-line input
-- Single-line: filtered results prominent behind
-- Multi-line: filtered results fade, submit button emphasized
 
 ### Submit (Conversation Expands)
 
@@ -78,15 +77,15 @@ The **Unified AI Command Bar** (user-facing: "Ask Docket") is Docket's primary i
 - AI response appears as reply bubble
 - Same conversation UI as VoiceRecordingView
 - **No TTS in text mode** — text bubbles only
-- One-shot completions (`type: "complete"` on first turn): auto-collapse with success toast + haptic
-- Multi-turn: conversation stays open, input bar at bottom for follow-up
+- High confidence: auto-save + QuickAcceptToast, bar collapses
+- Medium/low confidence: conversation expands with ChatTaskCard (Add/Edit/Cancel); user can type follow-ups to refine before confirming
 - Voice icon (5-bars) available mid-conversation — user can switch to voice
 
 ### Voice Mode (Tap 5-Bars)
 
-- Same full expansion into conversation view
+- Opens VoiceRecordingView sheet; **recording auto-starts** immediately after permissions (no second tap)
 - Mic active, TTS active, full conversation loop
-- All existing VoiceRecordingView behavior preserved (see [VOICE-TO-TASK-V2.md](VOICE-TO-TASK-V2.md))
+- All existing VoiceRecordingView behavior preserved (see [VOICE-TO-TASK-V2.md](../../VOICE-TO-TASK-V2.md))
 - User can switch to typing mid-conversation (and vice versa)
 - Text input bar available at bottom of expanded view
 
@@ -119,13 +118,14 @@ graph TD
 
 ## What Gets Deprecated
 
-| Item | Replacement |
-|------|-------------|
-| `.searchable` modifier on TaskListView | Live filtering in CommandBar text mode |
-| Mic toolbar button (`showingVoiceRecording`) | 5-bars icon in CommandBar |
-| "+" toolbar button (`showingAddTask` from toolbar) | "+" long-press context menu in CommandBar |
-| VoiceRecordingView as standalone `.sheet` | CommandBar expanded state (voice mode) |
-| Toolbar: filter, bell, profile, mic, + | Toolbar: filter, bell, profile only |
+| Item                                               | Replacement                                                  |
+| -------------------------------------------------- | ------------------------------------------------------------ |
+| SearchBar in toolbar                               | `.searchable` modifier on NavigationStack (pull-down search) |
+| Mic toolbar button (`showingVoiceRecording`)       | 5-bars icon in CommandBar                                    |
+| "+" toolbar button (`showingAddTask` from toolbar) | "+" tap opens AddTaskView; long-press context menu           |
+| InlineConfirmationBar, InlineTaskEditView          | ChatTaskCard in conversation view                            |
+| VoiceRecordingView as standalone `.sheet`          | CommandBar expanded state (voice mode)                       |
+| Toolbar: filter, bell, profile, mic, +             | Toolbar: filter, search, bell, profile                       |
 
 ---
 
@@ -152,34 +152,40 @@ graph TD
 
 ## Search Behavior
 
-- Filtering is **always-on** when typing (no toggle)
-- Magnifying glass indicator lights blue to show active filtering
-- Single-line input: filtered results prominent behind
-- Multi-line input: filtered results fade, submit button emphasized
-- **Pull-down within expanded conversation:** search through chat history (filter chat bubbles by text)
+- Search is **separate** from command bar — `.searchable` on NavigationStack
+- Tap magnifying glass or pull down to reveal search field
+- Command bar text is internal state only — used for AI input, not filtering
+- Search filters tasks by title; command bar sends to AI
 
 ---
 
 ## Design Decisions Locked
 
-| Decision | Choice |
-|----------|--------|
-| Internal name | "Unified AI Command Bar" |
-| User-facing name | "Ask Docket" |
-| Search | Implicit in text mode, always-on, no toggle |
-| Expansion trigger | Submit button (not word count) |
-| 5-bars vs submit | One position, two states — 5-bars when empty, submit when text present |
-| "+" interaction | Long-press context menu |
-| TTS in text mode | No — text bubbles only |
-| One-shot completions | Auto-collapse with success toast + haptic |
-| Mode switching | Voice ↔ text supported mid-conversation |
-| Message array | Same `messages[]` for both modes |
+| Decision          | Choice                                                                  |
+| ----------------- | ----------------------------------------------------------------------- |
+| Internal name     | "Unified AI Command Bar"                                                |
+| User-facing name  | "Ask Docket"                                                            |
+| Search            | `.searchable` on nav bar; decoupled from command bar                    |
+| Expansion trigger | Submit button (not word count)                                          |
+| 5-bars vs submit  | One position, two states — 5-bars when empty, submit when text present  |
+| "+" interaction   | Tap opens AddTaskView; long-press context menu                          |
+| TTS in text mode  | No — text bubbles only                                                  |
+| High confidence   | Auto-save + QuickAcceptToast; medium/low → ChatTaskCard in conversation |
+| Mode switching    | Voice ↔ text supported mid-conversation                                 |
+| Message array     | Same `messages[]` for both modes                                        |
+
+---
+
+## Recent Updates (2026-02-14)
+
+- **Expanded sheet title:** "Ask Docket" (was "Task Assistant")
+- **Voice auto-start:** Recording starts automatically when voice sheet opens (see [VOICE_UX_IMPROVEMENTS_2026-02-14.md](VOICE_UX_IMPROVEMENTS_2026-02-14.md))
 
 ---
 
 ## Cross-References
 
-- **Voice architecture:** [VOICE-TO-TASK-V2.md](VOICE-TO-TASK-V2.md)
+- **Voice architecture:** [VOICE-TO-TASK-V2.md](../../VOICE-TO-TASK-V2.md)
 - **Implementation tasks:** [TODO.md](TODO.md) § Phase 13
 - **Product roadmap:** [PRODUCT-ROADMAP.md](PRODUCT-ROADMAP.md)
 - **Onboarding:** [TUTORIALS.md](TUTORIALS.md) § T11–T14

@@ -13,15 +13,15 @@
 
 ### Module 1: Wire confidence routing
 - [ ] High confidence path: type "Remind me to call mom tomorrow" → QuickAcceptToast appears → task auto-saves
-- [ ] Medium confidence path: type ambiguous task → InlineConfirmationBar appears
-- [ ] Low confidence path: type unclear request → CommandBarExpanded opens
+- [ ] Medium/low confidence path: type ambiguous task → CommandBarExpanded opens with ChatTaskCard
 - [ ] Error handling: simulate network failure → graceful error message
 
-### Module 2: Inline edit mode
-- [ ] Tap "Edit" on InlineConfirmationBar → edit card expands
-- [ ] Edit title, date, priority, category → tap Save → task saved correctly
-- [ ] Tap Cancel → card dismisses, no task created
-- [ ] Category picker shows existing categories
+### Module 2: Conversation flow with ChatTaskCard
+- [ ] Medium/low confidence: AI returns type "complete" → ChatTaskCard appears below AI bubble
+- [ ] Tap "Add" on ChatTaskCard → task saved, confirmation bubble in chat
+- [ ] Tap "Edit" on ChatTaskCard → card dismisses, user can type corrections in chat
+- [ ] Tap "Cancel" on ChatTaskCard → card dismisses, conversation stays open
+- [ ] Type follow-up ("actually make it Wednesday") → AI re-parses → updated ChatTaskCard
 
 ### Module 3: Expanded conversation
 - [ ] Low confidence opens expanded view with chat bubbles
@@ -30,11 +30,12 @@
 - [ ] Swipe down or tap X dismisses expanded view
 
 ### Module 4: Voice mode integration
-- [ ] Tap voice button → bar expands → mic activates
+- [ ] Tap voice button → VoiceRecordingView sheet opens → **recording auto-starts** (no mic tap)
 - [ ] Speak task → transcription appears as chat bubble
 - [ ] AI response plays via TTS
 - [ ] Can switch to text input mid-conversation
 - [ ] Voice transcription commits → confidence flow triggered
+- [ ] Voice UX: "event"/"meeting" terminology works; "lunch" inferred as noon; fewer turns
 
 ### Module 5: Polish + deprecation
 - [ ] Toolbar has only filter, bell, profile (no mic, no +)
@@ -108,7 +109,7 @@
 ### Animations
 - [ ] Command bar expansion smooth (0.2-0.3s)
 - [ ] Toast slides in/out smoothly
-- [ ] Inline confirmation bar appears smoothly
+- [ ] ChatTaskCard spring animation on appear
 - [ ] Keyboard dismissal smooth
 
 ---
@@ -146,6 +147,20 @@
 - [ ] Minimum 44pt tap targets
 - [ ] High contrast mode supported
 - [ ] Reduce motion respected
+
+---
+
+---
+
+## Voice UX Improvements (2026-02-14)
+
+See [VOICE_UX_IMPROVEMENTS_2026-02-14.md](VOICE_UX_IMPROVEMENTS_2026-02-14.md) for full changelog.
+
+- [ ] Voice auto-start: tap voice button → recording starts immediately (no second tap)
+- [ ] "Make an event" / "schedule a meeting" parsed as task
+- [ ] "Lunch time" inferred as noon (no "noon or different time?" question)
+- [ ] User correction ("I asked you to meet with David") accepted as title
+- [ ] Expanded sheet header shows "Ask Docket" (not "Task Assistant")
 
 ---
 

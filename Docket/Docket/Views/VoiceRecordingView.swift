@@ -248,13 +248,22 @@ struct VoiceRecordingView: View {
             }
         }
         .onAppear {
+            updateInterruptionResumeIntent()
+            // Optimized sequence: prefetch voice profile in parallel, request permissions, then auto-start recording
             _Concurrency.Task {
+                // 1. Prefetch voice profile immediately (runs in parallel — ready by first utterance)
+                _Concurrency.Task {
+                    await parser.fetchVoiceProfile(isEnabled: personalizationEnabled)
+                }
+                // 2. Request permissions (required before recording)
                 let hasPermissions = await speechManager.requestPermissions()
                 if !hasPermissions {
                     errorMessage = speechManager.errorMessage ?? "Microphone and speech recognition permissions are required."
+                    return
                 }
+                // 3. Auto-start recording so user can speak immediately
+                await startRecording()
             }
-            updateInterruptionResumeIntent()
         }
         .onChange(of: state) { _, _ in updateInterruptionResumeIntent() }
         .onChange(of: ttsManager.isSpeaking) { _, _ in updateInterruptionResumeIntent() }
@@ -1450,74 +1459,6 @@ struct VoiceRecordingView: View {
             startConversationTimeout()
             state = .listening
             _Concurrency.Task { await speechManager.startRecording() }
-        }
-    }
-}
-
-struct AIThinkingIndicator: View {
-    let label: String
-    @State private var isAnimating = false
-    
-    var body: some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 6) {
-                ForEach(0..<3, id: \.self) { index in
-                    Circle()
-                        .fill(Color.blue)
-                        .frame(width: 8, height: 8)
-                        .opacity(isAnimating ? 1.0 : 0.25)
-                        .scaleEffect(isAnimating ? 1.0 : 0.7)
-                        .animation(
-                            .easeInOut(duration: 0.55)
-                                .repeatForever(autoreverses: true)
-                                .delay(Double(index) * 0.14),
-                            value: isAnimating
-                        )
-                }
-            }
-            Text(label)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(Color(.systemGray6))
-        .clipShape(Capsule())
-        .onAppear { isAnimating = true }
-        .onDisappear { isAnimating = false }
-    }
-}
-
-/// Lightweight wrapper so committed messages and live transcription share one identity space
-struct DisplayMessage: Identifiable {
-    let id: String
-    let message: ConversationMessage
-}
-
-struct MessageBubble: View {
-    let message: ConversationMessage
-    
-    var body: some View {
-        HStack {
-            if message.role == "user" {
-                Spacer(minLength: 48)
-            }
-            
-            Text(message.content)
-                .font(.body)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(
-                    message.role == "user" ? Color.blue : Color(.systemGray5)
-                )
-                .foregroundStyle(
-                    message.role == "user" ? .white : .primary
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 18))
-            
-            if message.role == "assistant" {
-                Spacer(minLength: 48)
-            }
         }
     }
 }
