@@ -141,7 +141,6 @@ struct TaskListView: View {
                     }
                 }
         }
-        .searchable(text: $viewModel.searchText, prompt: "Search tasks")
     }
     
     private var pendingCount: Int {
@@ -189,7 +188,10 @@ struct TaskListView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
-            filterMenu
+            HStack(spacing: 12) {
+                filterMenu
+                SearchBar(text: $viewModel.searchText, placeholder: "Search")
+            }
         }
         ToolbarItem(placement: .topBarTrailing) {
             trailingToolbar
