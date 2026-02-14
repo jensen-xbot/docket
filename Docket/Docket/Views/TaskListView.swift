@@ -136,8 +136,20 @@ struct TaskListView: View {
                     .environment(networkMonitor)
                 }
                 .safeAreaInset(edge: .bottom) {
-                    if !networkMonitor.isConnected {
-                        offlinePendingBanner
+                    VStack(spacing: 0) {
+                        if !networkMonitor.isConnected {
+                            offlinePendingBanner
+                        }
+                        
+                        CommandBarView(
+                            text: $viewModel.searchText,
+                            onSubmit: { text, callback in
+                                handleCommandSubmit(text, callback: callback)
+                            },
+                            onVoiceTap: {
+                                showingVoiceRecording = true
+                            }
+                        )
                     }
                 }
         }
@@ -230,18 +242,6 @@ struct TaskListView: View {
                     ProfileView(authManager: authManager)
                 } label: {
                     Image(systemName: "person.circle")
-                }
-            }
-            
-            Button(action: { showingVoiceRecording = true }) {
-                Image(systemName: "mic.fill")
-                    .fontWeight(.semibold)
-            }
-            
-            if !allTasks.isEmpty {
-                Button(action: { showingAddTask = true }) {
-                    Image(systemName: "plus")
-                        .fontWeight(.semibold)
                 }
             }
         }
@@ -479,6 +479,13 @@ struct TaskListView: View {
             PushNotificationManager.shared.pendingTaskNavigation = nil
             pendingTaskId = nil
         }
+    }
+    
+    private func handleCommandSubmit(_ text: String, callback: ((Bool) -> Void)? = nil) {
+        // TODO: Task 2 - Implement confidence flow
+        // For now, just print or show alert
+        print("Submitted: \(text)")
+        callback?(true)
     }
 }
 

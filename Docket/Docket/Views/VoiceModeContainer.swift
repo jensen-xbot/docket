@@ -1,206 +1,215 @@
 import SwiftUI
 import SwiftData
 
-/// Wraps voice recording into conversation format
-/// Shows listening state, transcribed text, AI responses
-/// Hands-free: auto-restart mic after TTS
+// MARK: - Voice Mode Container
+
+/// A container view for voice recording mode
+/// Handles voice recording UI, transcription display, TTS responses,
+/// and auto-restart mic after speaking
 struct VoiceModeContainer: View {
-    @Binding var messages: [ConversationMessage]
-    var onComplete: ([ParsedTask]) -> Void
-    var onDismiss: () -> Void
-    
     @StateObject private var speechManager = SpeechRecognitionManager()
     @StateObject private var ttsManager = TTSManager()
     @StateObject private var parser = VoiceTaskParser()
+    @Binding var messages: [ConversationMessage]
+    var onComplete: ([ParsedTask]) -> Void
+    var onCancel: () -> Void
     
     @State private var state: VoiceRecordingState = .idle
-    @State private var transcribedText = ""
     @State private var isProcessingUtterance = false
-    @AppStorage("useWhisperTranscription") private var useWhisperTranscription = false
     @AppStorage("personalizationEnabled") private var personalizationEnabled = true
     
-    private let conversationTimeoutSeconds: TimeInterval = 60
-    @State private var conversationTimeoutTask: Task<Void, Never>?
+    @Environment(\.modelContext) private var modelContext
+    @Environment(SyncEngine.self) private var syncEngine
+    @Environment(NetworkMonitor.self) private var networkMonitor
+    
+    /// Combines committed messages with live transcription
+    private var displayMessages: [DisplayMessage] {
+        var result = messages.enumerated().map { index, msg in
+            DisplayMessage(id: "msg-\(index)", message: msg)
+        }
+        
+        // Show live transcript during listening/processing
+        if (state == .listening || state == .processing) && !speechManager.transcribedText.isEmpty {
+            result.append(DisplayMessage(
+                id: "msg-\(messages.count)",
+                message: ConversationMessage(role: "user", content: speechManager.transcribedText)
+            ))
+        }
+        
+        return result
+    }
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Conversation area
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(spacing: 12) {
-                        Spacer(minLength: 20)
-                        
-                        // Display messages
-                        ForEach(Array(messages.enumerated()), id: \.offset) { index, message in
-                            MessageBubble(message: message)
-                                .id(index)
-                        }
-                        
-                        // Live transcription bubble
-                        if state == .listening && !speechManager.transcribedText.isEmpty {
-                            MessageBubble(
-                                message: ConversationMessage(
-                                    role: "user",
-                                    content: speechManager.transcribedText
-                                )
-                            )
-                        }
-                        
-                        // Processing indicator
-                        if state == .processing {
-                            AIThinkingIndicator(label: "Thinking...")
-                                .padding(.vertical, 4)
-                        }
-                        
-                        // TTS generating indicator
-                        if state == .speaking && ttsManager.isGeneratingTTS {
-                            AIThinkingIndicator(label: "Preparing voice...")
-                                .padding(.vertical, 4)
-                        }
-                        
-                        // Bottom anchor
-                        Color.clear
-                            .frame(height: 1)
-                            .id("bottom")
-                    }
-                    .padding(.horizontal)
-                }
-                .onChange(of: messages.count) { _, _ in
-                    scrollToBottom(proxy: proxy)
-                }
-                .onChange(of: speechManager.transcribedText) { _, _ in
-                    scrollToBottom(proxy: proxy)
-                }
-            }
+        ZStack {
+            Color(.systemGroupedBackground)
+                .ignoresSafeArea()
             
-            Spacer()
-            
-            // Voice button at bottom
-            voiceButtonArea
-        }
-        .onAppear(perform: onAppear)
-        .onDisappear(perform: onDisappear)
-        .onChange(of: speechManager.isRecording) { oldValue, newValue in
-            handleRecordingStateChange(oldValue: oldValue, newValue: newValue)
-        }
-    }
-    
-    private var voiceButtonArea: some View {
-        VStack(spacing: 12) {
-            Button(action: toggleRecording) {
-                ZStack {
-                    // Animated circle background
-                    Circle()
-                        .fill(state == .listening ? Color.red : Color.blue)
-                        .frame(width: 80, height: 80)
-                        .phaseAnimator([false, true], trigger: state) { content, phase in
-                            content.opacity(state == .listening && phase ? 0.8 : 1.0)
-                        } animation: { _ in
-                            .easeInOut(duration: 1.2)
-                        }
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Button("Cancel", action: onCancel)
+                        .font(.body)
                     
-                    // Icon
-                    ZStack {
-                        Image(systemName: "mic.fill")
-                            .font(.title)
-                            .foregroundStyle(.white)
-                        
-                        // Audio level indicator
-                        if state == .listening {
-                            Image(systemName: "mic.fill")
-                                .font(.title)
-                                .foregroundStyle(.green)
-                                .mask(
-                                    VStack(spacing: 0) {
-                                        Spacer(minLength: 0)
-                                        Rectangle()
-                                            .frame(height: CGFloat(speechManager.audioLevel) * 30)
-                                    }
-                                    .frame(height: 30)
-                                )
-                                .animation(.easeOut(duration: 0.08), value: speechManager.audioLevel)
+                    Spacer()
+                    
+                    Text("Voice Task")
+                        .font(.headline)
+                    
+                    Spacer()
+                    
+                    // Spacer to balance cancel button
+                    Text("Cancel")
+                        .font(.body)
+                        .opacity(0)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                
+                // Conversation area
+                ScrollViewReader { scrollProxy in
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            Spacer(minLength: 0)
+                            
+                            VStack(spacing: 12) {
+                                // Display messages
+                                ForEach(Array(displayMessages.enumerated()), id: \.element.id) { _, entry in
+                                    MessageBubble(message: entry.message)
+                                        .id(entry.id)
+                                }
+                                
+                                // Processing indicator
+                                if state == .processing {
+                                    AIThinkingIndicator(label: "Thinking...")
+                                        .padding(.vertical, 4)
+                                        .id("processing")
+                                }
+                                
+                                // TTS loading indicator
+                                if state == .speaking && ttsManager.isGeneratingTTS {
+                                    AIThinkingIndicator(label: "Preparing voice...")
+                                        .padding(.vertical, 4)
+                                        .id("tts-loading")
+                                }
+                                
+                                // Scroll anchor
+                                Color.clear
+                                    .frame(height: 1)
+                                    .id("bottom")
+                            }
+                            .padding(.horizontal)
+                            .padding(.vertical, 8)
+                        }
+                        .frame(minHeight: UIScreen.main.bounds.height * 0.4, alignment: .bottom)
+                    }
+                    .onChange(of: messages.count) { _, _ in
+                        DispatchQueue.main.async {
+                            scrollProxy.scrollTo("bottom", anchor: .bottom)
                         }
                     }
+                    .onChange(of: speechManager.transcribedText) { _, _ in
+                        scrollProxy.scrollTo("bottom", anchor: .bottom)
+                    }
+                    .onChange(of: state) { _, _ in
+                        scrollProxy.scrollTo("bottom", anchor: .bottom)
+                    }
+                }
+                
+                Spacer()
+                
+                // Mic button
+                VStack(spacing: 12) {
+                    Button(action: toggleRecording) {
+                        ZStack {
+                            // Circle background with animation
+                            Circle()
+                                .fill(state == .listening ? Color.red : Color.blue)
+                                .frame(width: 80, height: 80)
+                                .phaseAnimator([false, true], trigger: state) { content, phase in
+                                    content.opacity(state == .listening && phase ? 0.8 : 1.0)
+                                } animation: { _ in
+                                    .easeInOut(duration: 1.2)
+                                }
+                            
+                            // Mic icon with audio level fill
+                            ZStack {
+                                Image(systemName: "mic.fill")
+                                    .font(.title)
+                                    .foregroundStyle(.white)
+                                
+                                // Green level indicator
+                                if state == .listening {
+                                    Image(systemName: "mic.fill")
+                                        .font(.title)
+                                        .foregroundStyle(.green)
+                                        .mask(
+                                            VStack(spacing: 0) {
+                                                Spacer(minLength: 0)
+                                                Rectangle()
+                                                    .frame(height: CGFloat(speechManager.audioLevel) * 30)
+                                            }
+                                            .frame(height: 30)
+                                        )
+                                        .animation(.easeOut(duration: 0.08), value: speechManager.audioLevel)
+                                }
+                            }
+                        }
+                    }
+                    .disabled(state == .processing || state == .speaking)
+                    
+                    // Status text
+                    if state == .listening {
+                        Text("Listening...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else if state == .idle {
+                        Text("Tap to start")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else if state == .processing {
+                        Text("Thinking...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else if state == .speaking {
+                        Text("Speaking...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.bottom, 50)
+            }
+        }
+        .onAppear {
+            Task {
+                let hasPermissions = await speechManager.requestPermissions()
+                if !hasPermissions {
+                    // Handle permission error
+                    print("Microphone permissions required")
+                }
+                await parser.fetchVoiceProfile(isEnabled: personalizationEnabled)
+            }
+        }
+        .onDisappear {
+            speechManager.shouldResumeAfterInterruption = false
+            ttsManager.stop()
+            Task {
+                await speechManager.stopRecording()
+            }
+        }
+        .onChange(of: speechManager.isRecording) { oldValue, newValue in
+            // Auto-process when recording stops due to silence
+            if oldValue == true && newValue == false && state == .listening {
+                let text = speechManager.transcribedText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !text.isEmpty && !isProcessingUtterance {
+                    Task {
+                        await stopRecording()
+                    }
+                } else if text.isEmpty {
+                    state = .idle
                 }
             }
-            .disabled(state == .processing || state == .speaking)
-            
-            // Status text
-            statusText
-        }
-        .padding(.bottom, 32)
-    }
-    
-    private var statusText: some View {
-        Group {
-            switch state {
-            case .idle:
-                Text("Tap to start")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            case .listening:
-                Text("Listening...")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            case .processing:
-                Text("Processing...")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            case .speaking:
-                Text("Speaking...")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            case .complete:
-                Text("Done")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
         }
     }
-    
-    // MARK: - Lifecycle
-    
-    private func onAppear() {
-        Task {
-            let hasPermissions = await speechManager.requestPermissions()
-            if !hasPermissions {
-                // Handle permission error
-            }
-        }
-        
-        // Prefetch voice profile
-        Task {
-            await parser.fetchVoiceProfile(isEnabled: personalizationEnabled)
-        }
-        
-        startConversationTimeout()
-    }
-    
-    private func onDisappear() {
-        cancelConversationTimeout()
-        ttsManager.stop()
-        Task {
-            await speechManager.stopRecording()
-        }
-    }
-    
-    // MARK: - Recording State Handling
-    
-    private func handleRecordingStateChange(oldValue: Bool, newValue: Bool) {
-        // Auto-process when recording stops due to silence detection
-        if oldValue == true && newValue == false && state == .listening {
-            let text = speechManager.transcribedText.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !text.isEmpty && !isProcessingUtterance {
-                Task {
-                    await stopRecording()
-                }
-            } else if text.isEmpty {
-                state = .idle
-            }
-        }
-    }
-    
-    // MARK: - Actions
     
     private func toggleRecording() {
         Task {
@@ -220,7 +229,6 @@ struct VoiceModeContainer: View {
         generator.prepare()
         generator.impactOccurred()
         
-        startConversationTimeout()
         await speechManager.startRecording()
     }
     
@@ -231,19 +239,7 @@ struct VoiceModeContainer: View {
         
         await speechManager.stopRecording()
         
-        var text = speechManager.transcribedText.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        // Handle Whisper transcription if enabled
-        if useWhisperTranscription, let audioData = await speechManager.exportAudioAsWAV() {
-            do {
-                let whisperText = try await parser.transcribe(audioData: audioData)
-                if !whisperText.isEmpty {
-                    text = whisperText
-                }
-            } catch {
-                print("[VoiceModeContainer] Whisper failed, using Apple transcription: \(error)")
-            }
-        }
+        let text = speechManager.transcribedText.trimmingCharacters(in: .whitespacesAndNewlines)
         
         guard !text.isEmpty else {
             state = .idle
@@ -256,95 +252,67 @@ struct VoiceModeContainer: View {
         speechManager.transcribedText = ""
         
         // Process the utterance
-        await processUserUtterance(text)
+        await handleUserUtterance(text)
         isProcessingUtterance = false
     }
     
-    private func processUserUtterance(_ text: String) async {
-        // Build context
-        let existingTasks: [TaskContext] = [] // Would be populated from view model
-        let groceryStores: [GroceryStoreContext] = [] // Would be populated from view model
+    private func handleUserUtterance(_ text: String) async {
+        guard networkMonitor.isConnected else {
+            let errorMsg = "You're offline. I'll need a connection to process that."
+            messages.append(ConversationMessage(role: "assistant", content: errorMsg))
+            state = .idle
+            return
+        }
+        
+        state = .processing
         
         do {
-            let response = try await parser.send(
-                messages: messages,
-                existingTasks: existingTasks,
-                groceryStores: groceryStores,
-                personalization: parser.cachedProfile
-            )
+            let response = try await parser.send(messages: messages)
             
-            startConversationTimeout()
-            
+            // Handle different response types
             switch response.type {
             case "complete":
                 if let tasks = response.tasks {
-                    // Add AI summary to messages
-                    if let summary = response.summary {
-                        await speakResponse(summary)
-                    }
-                    
-                    // Return completed tasks
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        onComplete(tasks)
-                    }
+                    onComplete(tasks)
+                    return
                 }
-                
-            case "question":
-                if let questionText = response.text {
-                    await speakResponse(questionText)
-                }
+                fallthrough
                 
             default:
-                // Handle other response types
-                if let text = response.text ?? response.summary {
-                    await speakResponse(text)
+                // For questions or other responses, speak and continue
+                let responseText = response.text ?? response.summary ?? "I'm not sure I understood. Could you try again?"
+                
+                messages.append(ConversationMessage(role: "assistant", content: responseText))
+                
+                state = .speaking
+                ttsManager.speak(responseText) { [self] in
+                    state = .listening
+                    Task {
+                        await speechManager.startRecording()
+                    }
                 }
             }
         } catch {
+            let errorText = "Something went wrong. Want to try again?"
+            messages.append(ConversationMessage(role: "assistant", content: errorText))
             state = .idle
         }
     }
-    
-    private func speakResponse(_ text: String) async {
-        state = .speaking
-        
-        messages.append(ConversationMessage(role: "assistant", content: text))
-        
-        ttsManager.speak(text, accessToken: parser.lastAccessToken) { [self] in
-            state = .listening
-            Task {
-                await speechManager.startRecording()
-            }
-        }
-    }
-    
-    // MARK: - Helpers
-    
-    private func scrollToBottom(proxy: ScrollViewProxy) {
-        DispatchQueue.main.async {
-            withAnimation(.easeOut(duration: 0.2)) {
-                proxy.scrollTo("bottom", anchor: .bottom)
-            }
-        }
-    }
-    
-    private func startConversationTimeout() {
-        conversationTimeoutTask?.cancel()
-        conversationTimeoutTask = Task {
-            try? await Task.sleep(nanoseconds: UInt64(conversationTimeoutSeconds * 1_000_000_000))
-            
-            if state == .idle || state == .listening {
-                await MainActor.run {
-                    onDismiss()
-                }
-            }
-        }
-    }
-    
-    private func cancelConversationTimeout() {
-        conversationTimeoutTask?.cancel()
-        conversationTimeoutTask = nil
-    }
+}
+
+// MARK: - Supporting Types
+
+enum VoiceRecordingState {
+    case idle
+    case listening
+    case processing
+    case speaking
+    case complete
+}
+
+struct DisplayMessage: Identifiable {
+    let id: String
+    let message: ConversationMessage
 }
 
 // MARK: - Preview
@@ -357,11 +325,9 @@ struct VoiceModeContainer: View {
             VoiceModeContainer(
                 messages: $messages,
                 onComplete: { tasks in
-                    print("Completed with \(tasks.count) tasks")
+                    print("Completed with tasks: \(tasks.count)")
                 },
-                onDismiss: {
-                    print("Dismissed")
-                }
+                onCancel: {}
             )
         }
     }
