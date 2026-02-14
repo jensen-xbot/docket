@@ -143,8 +143,8 @@ struct TaskListView: View {
                         
                         CommandBarView(
                             text: $viewModel.searchText,
-                            onSubmit: { text, callback in
-                                handleCommandSubmit(text, callback: callback)
+                            onSubmit: { text, completion in
+                                handleCommandSubmit(text, completion: completion)
                             },
                             onVoiceTap: {
                                 showingVoiceRecording = true
@@ -481,11 +481,18 @@ struct TaskListView: View {
         }
     }
     
-    private func handleCommandSubmit(_ text: String, callback: ((Bool) -> Void)? = nil) {
+    private func handleCommandSubmit(_ text: String, completion: @escaping (ParseResponse) -> Void) {
         // TODO: Task 2 - Implement confidence flow
-        // For now, just print or show alert
+        // For now, create a mock response
         print("Submitted: \(text)")
-        callback?(true)
+        let mockResponse = ParseResponse(
+            type: "complete",
+            text: nil,
+            tasks: [ParsedTask(title: text, dueDate: nil, priority: nil, category: nil, note: nil)],
+            taskId: nil,
+            changes: nil
+        )
+        completion(mockResponse)
     }
 }
 
