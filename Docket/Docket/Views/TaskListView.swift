@@ -68,6 +68,14 @@ struct TaskListView: View {
     @State private var unreadNotificationCount = 0
     @State private var activeProgressTaskId: UUID?
     
+    // MARK: - Confidence Flow State
+    @State private var showingQuickAcceptToast = false
+    @State private var showingInlineConfirmation = false
+    @State private var showingCommandBarExpanded = false
+    @State private var lastParsedTasks: [ParsedTask] = []
+    @State private var lastParseResponse: ParseResponse?
+    @State private var parser = VoiceTaskParser()
+    
     private var filteredTasks: [Task] {
         viewModel.filteredTasks(from: allTasks)
     }
@@ -83,8 +91,53 @@ struct TaskListView: View {
     
     var body: some View {
         NavigationStack {
-            mainContent
-                .navigationTitle("Docket")
+            ZStack {
+                mainContent
+                
+                // Quick Accept Toast (high confidence)
+                if showingQuickAcceptToast, let task = lastParsedTasks.first {
+                    VStack {
+                        Spacer()
+                        QuickAcceptToast(
+                            taskTitle: task.title,
+                            onUndo: {
+                                showingQuickAcceptToast = false
+                                // TODO: Implement undo logic
+                            }
+                        )
+                        .padding(.bottom, 100)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                
+                // Inline Confirmation Bar (medium confidence)
+                if showingInlineConfirmation, let task = lastParsedTasks.first, let response = lastParseResponse {
+                    VStack {
+                        Spacer()
+                        InlineConfirmationBar(
+                            task: task,
+                            confidence: response.effectiveConfidence,
+                            onConfirm: {
+                                saveParsedTasks(lastParsedTasks)
+                                showingInlineConfirmation = false
+                                viewModel.searchText = ""
+                            },
+                            onEdit: {
+                                // Open expanded mode for editing
+                                showingInlineConfirmation = false
+                                showingCommandBarExpanded = true
+                            },
+                            onCancel: {
+                                showingInlineConfirmation = false
+                                lastParsedTasks = []
+                            }
+                        )
+                        .padding(.bottom, 80)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .navigationTitle("Docket")
                 .toolbar { toolbarContent }
                 .refreshable {
                     await syncAll()
@@ -482,17 +535,94 @@ struct TaskListView: View {
     }
     
     private func handleCommandSubmit(_ text: String, completion: @escaping (ParseResponse) -> Void) {
-        // TODO: Task 2 - Implement confidence flow
-        // For now, create a mock response
-        print("Submitted: \(text)")
-        let mockResponse = ParseResponse(
-            type: "complete",
-            text: nil,
-            tasks: [ParsedTask(title: text, dueDate: nil, priority: nil, category: nil, note: nil)],
-            taskId: nil,
-            changes: nil
-        )
-        completion(mockResponse)
+        Task {
+            let messages = [ConversationMessage(role: "user", content: text)]
+            
+            do {
+                let response = try await parser.send(messages: messages)
+                await MainActor.run {
+                    self.lastParseResponse = response
+                    
+                    switch response.effectiveConfidence {
+                    case .high:
+                        // Auto-accept with toast
+                        if let tasks = response.tasks {
+                            self.lastParsedTasks = tasks
+                            self.showingQuickAcceptToast = true
+                            // Auto-save after delay
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                self.saveParsedTasks(tasks)
+                            }
+                        }
+                        
+                    case .medium:
+                        // Show inline confirmation
+                        if let tasks = response.tasks {
+                            self.lastParsedTasks = tasks
+                            self.showingInlineConfirmation = true
+                        }
+                        
+                    case .low:
+                        // Expand for conversation
+                        self.showingCommandBarExpanded = true
+                    }
+                    
+                    // Pass response to CommandBarView for UI handling
+                    completion(response)
+                }
+            } catch {
+                print("Parse error: \(error)")
+                // Return a low-confidence response on error to trigger expanded mode
+                let errorResponse = ParseResponse(
+                    type: "question",
+                    text: "I didn't understand that. Could you rephrase?",
+                    tasks: nil,
+                    taskId: nil,
+                    changes: nil,
+                    summary: nil,
+                    confidence: .low
+                )
+                await MainActor.run {
+                    completion(errorResponse)
+                }
+            }
+        }
+    }
+    
+    private func saveParsedTasks(_ tasks: [ParsedTask]) {
+        Task {
+            for parsedTask in tasks {
+                let priority: Priority = {
+                    switch parsedTask.priority.lowercased() {
+                    case "low": return .low
+                    case "high": return .high
+                    default: return .medium
+                    }
+                }()
+                
+                let task = Task(
+                    title: parsedTask.title,
+                    dueDate: parsedTask.dueDate,
+                    hasTime: parsedTask.hasTime,
+                    priority: priority,
+                    category: parsedTask.category,
+                    notes: parsedTask.notes,
+                    syncStatus: .pending
+                )
+                
+                modelContext.insert(task)
+                
+                // Schedule notification if due date exists
+                if parsedTask.dueDate != nil {
+                    await NotificationManager.shared.scheduleNotification(for: task)
+                }
+                
+                // Push to sync engine
+                await syncEngine.pushTask(task)
+            }
+            
+            try? modelContext.save()
+        }
     }
 }
 
