@@ -17,7 +17,7 @@ Voice-to-task with conversational AI lets users create, categorize, annotate, an
 - **Cloud sync:** Supabase bi-directional with offline queue
 - **Voice transcription:** Apple SFSpeechRecognizer (on-device, free)
 - **TTS readback:** OpenAI gpt-4o-mini-tts (streaming PCM) / AVSpeechSynthesizer (fallback)
-- **AI parsing:** gpt-4.1-mini via OpenRouter → Supabase Edge Function
+- **AI parsing:** Gemini 2.5 Flash via OpenRouter → Supabase Edge Function (streaming SSE)
 - **Audio capture:** AVAudioEngine + AVAudioSession
 - **No orchestrator:** Single-shot/conversational API calls — no LangChain/LangGraph
 
@@ -126,9 +126,11 @@ struct ParseResponse: Codable {
 - `Views/TaskConfirmationView.swift` — Parsed task list with edit/confirm
 - `Models/ParsedTask.swift` — Lightweight struct for AI response (includes TaskContext, TaskChanges)
 
-### Unified AI Command Bar (Phase 13 — planned)
+### Unified AI Command Bar (Phase 13)
 - `Views/CommandBarView.swift` — Bottom command bar, voice + text unified, expansion animation
-- `Views/ConversationView.swift` — Shared chat UI (extracted from VoiceRecordingView)
+- `Views/CommandBarExpanded.swift` — Expanded conversation overlay with ChatTaskCard
+- `Views/ConversationView.swift` — Shared chat UI with message bubbles + ChatTaskCard
+- `Views/ChatTaskCard.swift` — Elevated task preview card (Add/Edit/Cancel) in conversation
 - `Views/TextInputBar.swift` — Compose bar + mode switch (text/voice/+)
 - See [UNIFIED-AI-COMMAND-BAR.md](UNIFIED-AI-COMMAND-BAR.md)
 
@@ -250,13 +252,63 @@ cd /Users/johnyblueyes/Documents/Docket/docket/Docket && xcodebuild -project Doc
 ## Context
 This app is for Jon — a busy professional juggling sales work, side projects (Closelo), family, and personal routines. Needs quick capture (2-3 taps) and clear organization without friction.
 
+## OpenClaw (Jensen) Coordination — EVERY SESSION
+
+Jensen is an autonomous AI coding agent running on a remote Linux server (DigitalOcean). It works on the same repo (`jensen-xbot/docket`) asynchronously — pushing code while you're away. **Every Cursor session must start with a sync check.**
+
+### Pre-Session Check (do FIRST, before any code changes)
+```bash
+cd /Users/johnyblueyes/Documents/Docket/docket && git fetch origin && git log --oneline origin/feature/command-bar-v2 -5 && git log --oneline origin/master -5
+```
+
+**If there are new commits from Jensen:**
+1. Review `docs/jensen/BUILD_VERIFICATION.md` for new files that need pbxproj entries
+2. Review `docs/jensen/NEEDS_TESTING.md` for the current test checklist
+3. Pull the branch: `git checkout feature/command-bar-v2 && git pull`
+4. Add any new `.swift` files to `project.pbxproj` (use the xcode-add-swift-file skill)
+5. Run build verification: `xcodebuild -project Docket.xcodeproj -scheme Docket -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build 2>&1 | tail -30`
+6. Fix any compile errors (common: `Task` ambiguity → use `_Concurrency.Task`, duplicate type definitions, wrong API names)
+7. Update `docs/jensen/NEEDS_TESTING.md` checkboxes as items pass
+
+### Common Jensen Build Issues
+| Issue | Fix |
+|-------|-----|
+| `Task {}` ambiguity (SwiftData Task vs concurrency) | Use `_Concurrency.Task {}` |
+| Duplicate type definitions across files | Remove the duplicate, keep the standalone file |
+| `@StateObject` with `@Observable` classes | Change to `@State` |
+| Wrong method names on managers | Check actual API in Managers/ folder |
+| Missing pbxproj entries | Use xcode-add-swift-file skill |
+
+### Jensen's Documentation
+- `docs/jensen/` — All Jensen work docs, build verification, testing checklists
+- `docs/jensen/BUILD_VERIFICATION.md` — Per-module: new files, imports, state vars
+- `docs/jensen/NEEDS_TESTING.md` — Full test checklist with checkboxes
+- `docs/jensen/INTEGRATION_GUIDE.md` — pbxproj instructions, SF Symbols, dependencies
+- `docs/jensen/reports/` — Session reports
+- `docs/jensen/tasks/` — Task specs and QA reports
+
+### Jensen's Infrastructure
+- **Server:** DigitalOcean Ubuntu (`jensen@138.197.45.59`)
+- **Repo:** `/home/jensen/.openclaw/workspace/projects/docket`
+- **Agents:** Jensen (main, kimi-k2.5), Coding (deepseek-v3.2), QA (minimax-m2.5)
+- **Communication:** Telegram
+- **GitHub:** `jensen-xbot` (gh CLI authenticated)
+- **Supabase CLI:** Authenticated, linked to Docket v1
+- **Limitation:** No Xcode — cannot verify Swift builds
+
+### Workflow: Jensen builds → Cursor verifies
+1. Jensen works autonomously on feature branches
+2. Cursor pulls, adds files to pbxproj, builds, fixes compile errors
+3. Cursor tests on Simulator and updates NEEDS_TESTING.md
+4. Both agents contribute to the same repo — coordinate via branch strategy
+
 ## Development Notes
 - iOS 17+ target (latest SwiftUI features like `@Observable` macro)
 - Dark mode from day 1 (SwiftUI handles this via `@Environment(\.colorScheme)`)
 - MVP complete — local persistence with SwiftData
 - v1.0 complete — cloud sync via Supabase with offline queue + conflict resolution
 - v1.1 in progress — conversational voice-to-task with multi-turn dialogue (see VOICE-TO-TASK-V2.md)
-- AI model: gpt-4.1-mini via OpenRouter (fast, cheap, structured output)
+- AI model: DeepSeek V3.2 via OpenRouter (fast, cheap, structured output)
 - No thinking models (o1/o3/R1) — task parsing is pattern extraction, not reasoning
 - No orchestrator (LangChain/LangGraph) — conversation loop is ~15 lines of Swift on the client
 

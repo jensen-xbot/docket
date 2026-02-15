@@ -7,9 +7,9 @@ import SwiftData
 /// Handles voice recording UI, transcription display, TTS responses,
 /// and auto-restart mic after speaking
 struct VoiceModeContainer: View {
-    @StateObject private var speechManager = SpeechRecognitionManager()
-    @StateObject private var ttsManager = TTSManager()
-    @StateObject private var parser = VoiceTaskParser()
+    @State private var speechManager = SpeechRecognitionManager()
+    @State private var ttsManager = TTSManager()
+    @State private var parser = VoiceTaskParser()
     @Binding var messages: [ConversationMessage]
     var onComplete: ([ParsedTask]) -> Void
     var onCancel: () -> Void
@@ -17,6 +17,10 @@ struct VoiceModeContainer: View {
     @State private var state: VoiceRecordingState = .idle
     @State private var isProcessingUtterance = false
     @AppStorage("personalizationEnabled") private var personalizationEnabled = true
+    
+    @Query(filter: #Predicate<Task> { !$0.isCompleted }, sort: \Task.createdAt, order: .reverse) private var activeTasks: [Task]
+    @Query(filter: #Predicate<Task> { $0.isCompleted }, sort: \Task.completedAt, order: .reverse) private var completedTasks: [Task]
+    @Query(sort: \GroceryStore.name) private var groceryStores: [GroceryStore]
     
     @Environment(\.modelContext) private var modelContext
     @Environment(SyncEngine.self) private var syncEngine
@@ -180,19 +184,19 @@ struct VoiceModeContainer: View {
             }
         }
         .onAppear {
-            Task {
+            _Concurrency.Task {
                 let hasPermissions = await speechManager.requestPermissions()
                 if !hasPermissions {
                     // Handle permission error
                     print("Microphone permissions required")
                 }
-                await parser.fetchVoiceProfile(isEnabled: personalizationEnabled)
+                _ = await parser.fetchVoiceProfile(isEnabled: personalizationEnabled)
             }
         }
         .onDisappear {
             speechManager.shouldResumeAfterInterruption = false
             ttsManager.stop()
-            Task {
+            _Concurrency.Task {
                 await speechManager.stopRecording()
             }
         }
@@ -201,7 +205,7 @@ struct VoiceModeContainer: View {
             if oldValue == true && newValue == false && state == .listening {
                 let text = speechManager.transcribedText.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !text.isEmpty && !isProcessingUtterance {
-                    Task {
+                    _Concurrency.Task {
                         await stopRecording()
                     }
                 } else if text.isEmpty {
@@ -212,7 +216,7 @@ struct VoiceModeContainer: View {
     }
     
     private func toggleRecording() {
-        Task {
+        _Concurrency.Task {
             if state == .listening {
                 await stopRecording()
             } else {
@@ -256,6 +260,49 @@ struct VoiceModeContainer: View {
         isProcessingUtterance = false
     }
     
+    private func buildTaskContext(userText: String = "") -> [TaskContext] {
+        let active = Array(activeTasks.prefix(50))
+        let recentCompleted = Array(completedTasks.prefix(20))
+        let keywords = userText.lowercased()
+            .split(separator: " ")
+            .map(String.init)
+            .filter { $0.count >= 2 && !["the", "and", "for", "with", "tomorrow", "today", "next", "this", "that", "add", "create", "make", "schedule", "remind", "me", "my", "to", "a", "an", "on", "at", "by", "is", "it"].contains($0) }
+        let tasksToSend: [Task]
+        if !keywords.isEmpty {
+            let matched = (active + recentCompleted)
+                .filter { task in
+                    let titleLower = task.title.lowercased()
+                    return keywords.contains { titleLower.contains($0) }
+                }
+                .prefix(10)
+            let matchedIds = Set(matched.map { $0.id.uuidString })
+            let recent = active.filter { !matchedIds.contains($0.id.uuidString) }.prefix(15)
+            tasksToSend = Array(matched + recent)
+        } else {
+            tasksToSend = Array(active.prefix(20) + recentCompleted.prefix(5))
+        }
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+        let dateTimeFormatter = DateFormatter()
+        dateTimeFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm"
+        dateTimeFormatter.timeZone = TimeZone.current
+        return tasksToSend.map { task in
+            let dueDateString: String?
+            if let dueDate = task.dueDate {
+                dueDateString = task.hasTime ? dateTimeFormatter.string(from: dueDate) : dateFormatter.string(from: dueDate)
+            } else {
+                dueDateString = nil
+            }
+            let priorityString: String = { switch task.priority { case .low: return "low"; case .high: return "high"; default: return "medium" } }()
+            return TaskContext(id: task.id.uuidString, title: task.title, dueDate: dueDateString, priority: priorityString, category: task.category, isCompleted: task.isCompleted, progressPercentage: task.progressPercentage, isProgressEnabled: task.isProgressEnabled, recurrenceRule: task.recurrenceRule)
+        }
+    }
+    
+    private func buildGroceryStoreContext() -> [GroceryStoreContext] {
+        groceryStores.map { GroceryStoreContext(name: $0.name, itemCount: $0.items.count) }
+    }
+    
     private func handleUserUtterance(_ text: String) async {
         guard networkMonitor.isConnected else {
             let errorMsg = "You're offline. I'll need a connection to process that."
@@ -266,8 +313,11 @@ struct VoiceModeContainer: View {
         
         state = .processing
         
+        let existingTasks = buildTaskContext(userText: text)
+        let groceryStoresContext = buildGroceryStoreContext()
+        
         do {
-            let response = try await parser.send(messages: messages)
+            let response = try await parser.sendStreaming(messages: messages, existingTasks: existingTasks, groceryStores: groceryStoresContext)
             
             // Handle different response types
             switch response.type {
@@ -287,7 +337,7 @@ struct VoiceModeContainer: View {
                 state = .speaking
                 ttsManager.speak(responseText) { [self] in
                     state = .listening
-                    Task {
+                    _Concurrency.Task {
                         await speechManager.startRecording()
                     }
                 }
@@ -298,21 +348,6 @@ struct VoiceModeContainer: View {
             state = .idle
         }
     }
-}
-
-// MARK: - Supporting Types
-
-enum VoiceRecordingState {
-    case idle
-    case listening
-    case processing
-    case speaking
-    case complete
-}
-
-struct DisplayMessage: Identifiable {
-    let id: String
-    let message: ConversationMessage
 }
 
 // MARK: - Preview

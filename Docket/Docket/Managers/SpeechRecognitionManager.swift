@@ -31,8 +31,8 @@ class SpeechRecognitionManager: NSObject {
     private var interruptionObserver: (any NSObjectProtocol)?
     private var silenceTimerTask: _Concurrency.Task<Void, Never>?
     private var levelPollTask: _Concurrency.Task<Void, Never>?
-    private let shortSilenceTimeoutSeconds: TimeInterval = 2.2
-    private let longSilenceTimeoutSeconds: TimeInterval = 2.8
+    private let shortSilenceTimeoutSeconds: TimeInterval = 1.5
+    private let longSilenceTimeoutSeconds: TimeInterval = 2.2
     
     // Audio buffer for Whisper transcription
     // Using a class wrapper so we can mutate from nonisolated context

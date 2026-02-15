@@ -273,22 +273,23 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const model = Deno.env.get("OPENROUTER_MODEL") || "deepseek/deepseek-v3.2";
+    const model = Deno.env.get("OPENROUTER_MODEL") || "google/gemini-2.5-flash-preview";
 
     // Build system prompt with task context
     let systemContent = `${SYSTEM_PROMPT}\n\nToday's date: ${today}\nTimezone: ${timezone}`;
     
     if (existingTasks && existingTasks.length > 0) {
       const taskList = existingTasks.map((t) => {
-        const dueDateStr = t.dueDate ? ` (due: ${t.dueDate})` : "";
-        const categoryStr = t.category ? ` [${t.category}]` : "";
-        const statusStr = t.isCompleted ? " [completed]" : "";
-        const progressStr = t.isProgressEnabled ? ` [${t.progressPercentage}% progress]` : "";
-        const recurStr = t.recurrenceRule ? ` [recurring: ${t.recurrenceRule}]` : "";
-        return `- ${t.title}${dueDateStr}${categoryStr}${progressStr}${recurStr}${statusStr} (id: ${t.id})`;
+        const parts = [t.id, t.title, t.dueDate ?? "", t.priority, t.category ?? ""];
+        const extras: string[] = [];
+        if (t.isCompleted) extras.push("completed");
+        if (t.isProgressEnabled && t.progressPercentage > 0) extras.push(`${t.progressPercentage}%`);
+        if (t.recurrenceRule) extras.push(`recur:${t.recurrenceRule}`);
+        const suffix = extras.length > 0 ? `|${extras.join(",")}` : "";
+        return `${parts.join("|")}${suffix}`;
       }).join("\n");
       
-      systemContent += `\n\nUser's existing tasks:\n${taskList}\n\nWhen the user asks to modify, complete, or delete a task, match it by title and use the task's id in your response.`;
+      systemContent += `\n\nUser's existing tasks (format: id|title|dueDate|priority|category|extras):\n${taskList}\n\nWhen the user asks to modify, complete, or delete a task, match it by title and use the task's id in your response.`;
     }
     
     if (groceryStores && groceryStores.length > 0) {
@@ -385,7 +386,8 @@ Deno.serve(async (req: Request) => {
           model,
           messages: chatMessages,
           response_format: { type: "json_object" },
-          temperature: 0.7,
+          temperature: 0.3,
+          stream: true,
         }),
       });
     } catch (e) {
@@ -409,54 +411,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const openRouterData = await openRouterResponse.json();
-    const aiContent = openRouterData.choices?.[0]?.message?.content;
-
-    if (!aiContent) {
-      return new Response(
-        JSON.stringify({ error: "Invalid AI response" }),
-        { status: 502, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    // Parse AI response as JSON
-    let parseResponse: ParseResponse;
-    try {
-      parseResponse = JSON.parse(aiContent);
-    } catch (e) {
-      console.error("Failed to parse AI response:", e, aiContent);
-      return new Response(
-        JSON.stringify({ error: "Invalid AI response format" }),
-        { status: 502, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    // Normalize response type — if the AI returns an unexpected type
-    // (e.g., "greeting", "clarification"), coerce it to "question" so
-    // the client always gets a valid response instead of an error.
-    const validTypes = ["question", "complete", "update", "delete"];
-    if (!validTypes.includes(parseResponse.type)) {
-      console.warn("AI returned unexpected type:", parseResponse.type, "— coercing to question");
-      // Try to extract a usable text response from whatever the AI returned
-      const fallbackText = parseResponse.text
-        || (parseResponse as any).message
-        || (parseResponse as any).response
-        || "What would you like to do?";
-      parseResponse = { type: "question", text: fallbackText };
-    }
-
-    // Ensure tasks have IDs if present
-    if (parseResponse.tasks) {
-      parseResponse.tasks = parseResponse.tasks.map((task) => ({
-        ...task,
-        id: task.id || crypto.randomUUID(),
-      }));
-    }
-
-    // Return response
-    return new Response(JSON.stringify(parseResponse), {
+    // Proxy the SSE stream directly to the client for low-latency consumption
+    return new Response(openRouterResponse.body, {
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "text/event-stream",
         "Access-Control-Allow-Origin": "*",
       },
     });

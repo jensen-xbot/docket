@@ -4,7 +4,7 @@
 
 Docket's voice assistant is a **conversational AI** — users speak naturally and the assistant talks back, asks for missing details, and confirms before saving. It adapts to how much context the user provides: say everything at once and it creates the task immediately; say just a title and it asks follow-up questions.
 
-The system transcribes speech on-device (Apple SFSpeechRecognizer), sends conversation history to a cloud AI (gpt-4.1-mini via Supabase Edge Function), and receives either a follow-up question or completed task(s). TTS reads responses aloud so the user can interact hands-free. The next evolution is a **personalization adaptation loop** that learns each user's words, expressions, and habits from corrections and editing patterns.
+The system transcribes speech on-device (Apple SFSpeechRecognizer), sends conversation history to a cloud AI (Gemini 2.5 Flash via Supabase Edge Function, streaming SSE), and receives either a follow-up question or completed task(s). TTS reads responses aloud so the user can interact hands-free. The next evolution is a **personalization adaptation loop** that learns each user's words, expressions, and habits from corrections and editing patterns.
 
 ---
 
@@ -63,6 +63,13 @@ The system transcribes speech on-device (Apple SFSpeechRecognizer), sends conver
 - **Mic auto-restarts:** After TTS finishes speaking, the mic re-activates automatically so the user can respond hands-free.
 - **Visual + audio:** Every AI response appears as text AND is spoken via TTS. User can mute TTS in Settings.
 
+### Latency optimizations (Feb 2026)
+- **Silence detection:** 1.5s (short) / 2.2s (long) — faster than previous 2.2s/2.8s
+- **Streaming parse:** Edge Function proxies OpenRouter SSE stream to client; iOS consumes incrementally
+- **TTS overlap:** For question-type responses, TTS starts as soon as response is decoded (before full handling)
+- **Smart context:** Relevance-filtered task list (keyword match + recent) and compact pipe-delimited format reduce input tokens
+- See [VOICE_LATENCY_OPTIMIZATION_2026-02-14.md](docs/jensen/VOICE_LATENCY_OPTIMIZATION_2026-02-14.md)
+
 ### Synchronized text + audio (v1.1)
 Assistant responses use streaming TTS for low latency:
 - Text is revealed immediately; TTS streams PCM audio from OpenAI gpt-4o-mini-tts via Edge Function.
@@ -88,7 +95,7 @@ flowchart LR
     userSpeech["UserSpeech"] --> intentGate["IntentGate(client)"]
     intentGate -->|"deterministic_control"| localFlow["LocalControlFlow"]
     intentGate -->|"semantic_parse_needed"| edgeFn["SupabaseEdgeFunction"]
-    edgeFn --> modelCall["OpenRouterModel(gpt-4.1-mini)"]
+    edgeFn --> modelCall["OpenRouterModel(Gemini2.5Flash)"]
     modelCall --> edgeFn
     edgeFn --> parseResult["ParseResult(question/complete/update/delete)"]
     localFlow --> uiState["VoiceUIStateAndSession"]
@@ -131,7 +138,8 @@ flowchart LR
 │                                              │
 │  Receives: { messages[], today, timezone,     │
 │             existingTasks[], groceryStores[] }│
-│  Forwards to OpenRouter (gpt-4.1-mini)       │
+│  Forwards to OpenRouter (Gemini 2.5 Flash,   │
+│  streaming SSE)                              │
 │  Returns one of:                             │
 │    → { type: "question", text: "..." }       │
 │    → { type: "complete", tasks: [...],       │
@@ -240,9 +248,9 @@ For task parsing (structured extraction from natural language), the model must b
 | **deepseek-r1** | Slow (3-5s) | ~$0.55 in / $2.19 out | ❌ Overkill, "thinks" before responding |
 | **gpt-4.1 (full)** | Fast | ~$2 in / $8 out | ❌ Works but 20x more expensive for same quality |
 
-**Primary Recommendation: `openai/gpt-4.1-mini` via OpenRouter**
-- Successor to gpt-4o-mini with better instruction following
-- Lightning fast (<500ms)
+**Current (Feb 2026): `google/gemini-2.5-flash-preview` via OpenRouter**
+- Fast TTFT, built-in reasoning for intent resolution
+- Streaming SSE for low latency
 - Native JSON/structured output mode
 - Reliable schema adherence (handles notes extraction + sharing intent well)
 - ~$0.001 per task extracted
@@ -614,7 +622,7 @@ server simple and avoids session management.
 
 ### Environment Variables (Supabase Secrets)
 - `OPENROUTER_API_KEY` — Your OpenRouter API key
-- `OPENROUTER_MODEL` — Default model (e.g., `openai/gpt-4.1-mini`)
+- `OPENROUTER_MODEL` — Default model (e.g., `google/gemini-2.5-flash-preview`); set to `deepseek/deepseek-v3.2` to revert
 
 ---
 
@@ -699,17 +707,17 @@ Before starting this feature:
 | Apple Speech | Unlimited | Free |
 | OpenAI gpt-4o-mini-tts (primary, streaming) | ~150 responses | ~$0.20-0.30 |
 | AVSpeechSynthesizer (fallback) | Fallback only | Free (on-device) |
-| OpenRouter (gpt-4.1-mini) | ~150 calls (~50 tasks × ~3 turns avg) | ~$0.08 |
+| OpenRouter (Gemini 2.5 Flash) | ~150 calls (~50 tasks × ~3 turns avg) | ~$0.10–0.15 |
 | Supabase Edge Functions | ~150 invocations | Free tier |
-| **Total per user** | | **~$0.30-0.45/month** |
-| **100 users** | | **~$30-45/month** |
+| **Total per user** | | **~$0.35-0.50/month** |
+| **100 users** | | **~$35-50/month** |
 
 Conversational adds ~2-3x more API calls vs single-shot (follow-up questions),
 but still very cheap because:
 - Speech is on-device (no Whisper costs)
 - OpenAI gpt-4o-mini-tts provides streaming, low-latency quality; AVSpeechSynthesizer remains free fallback
 - Only sending text to AI (not audio)
-- gpt-4.1-mini is cheap for chat completion
+- Gemini 2.5 Flash is cost-effective for chat completion
 - Power users who say everything at once use only 1 call (same as single-shot)
 - Average conversation is 2-4 turns, not 10
 
@@ -724,7 +732,7 @@ but still very cheap because:
 5. **Notes extraction:** Yes — AI prompt extracts contextual details into `notes` field.
 6. **Voice-initiated sharing:** Yes — AI extracts share targets from speech. Resolved via contacts cache or inline prompt.
 7. **Corrections:** Supported — user can say "actually make it Wednesday" mid-conversation and AI updates accordingly.
-8. **Model choice:** `openai/gpt-4.1-mini` via OpenRouter. Fast, cheap, excellent structured output. No thinking model needed.
+8. **Model choice:** `google/gemini-2.5-flash-preview` via OpenRouter (Feb 2026). Fast, streaming SSE, built-in reasoning. Fallback: `deepseek/deepseek-v3.2`.
 9. **Orchestrator:** Not needed even for conversational. Conversation state is a messages array on the iOS client. Edge Function is stateless. No LangChain/LangGraph.
 10. **Dependencies:** Zero new installs. Apple Speech, AVFoundation, AVSpeechSynthesizer are all built into iOS. Edge Function uses native Deno `fetch()`.
 11. **Audio session:** Use `.playAndRecord` category with `.defaultToSpeaker` override. TTS uses AVAudioEngine for streaming playback; stop recording during TTS, restart after completion callback.
@@ -740,4 +748,4 @@ but still very cheap because:
 
 ---
 
-*Architecture documented 2026-02-06 — Updated 2026-02-10 with reliability hardening and personalization adaptation roadmap*
+*Architecture documented 2026-02-06 — Updated 2026-02-14 with latency optimizations (Gemini Flash, streaming SSE, smart context)*

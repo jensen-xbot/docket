@@ -67,18 +67,10 @@ struct TaskListView: View {
     @State private var showContactsForInvite = false
     @State private var unreadNotificationCount = 0
     @State private var activeProgressTaskId: UUID?
+    @State private var isSearchPresented = false
+    @FocusState private var isSearchFocused: Bool
     
-    // MARK: - Confidence Flow State
-    @State private var showingQuickAcceptToast = false
-    @State private var showingInlineConfirmation = false
-    @State private var showingInlineEdit = false
-    @State private var parsedTaskToEdit: ParsedTask?
-    @State private var showingCommandBarExpanded = false
-    @State private var lastParsedTasks: [ParsedTask] = []
-    @State private var lastParseResponse: ParseResponse?
     @State private var parser = VoiceTaskParser()
-    @State private var conversationMessages: [ConversationMessage] = []
-    @State private var isProcessingConversation = false
     
     // MARK: - Grocery Stores (for templates)
     @Query(sort: \GroceryStore.name) private var groceryStores: [GroceryStore]
@@ -98,100 +90,18 @@ struct TaskListView: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
+            VStack(spacing: 0) {
+                // Inline search bar at the top of the content area
+                if isSearchPresented {
+                    inlineSearchBar
+                        .padding(.horizontal)
+                        .padding(.vertical, 8)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+                
                 mainContent
-                
-                // Quick Accept Toast (high confidence)
-                if showingQuickAcceptToast, let task = lastParsedTasks.first {
-                    VStack {
-                        Spacer()
-                        QuickAcceptToast(
-                            taskTitle: task.title,
-                            onUndo: {
-                                showingQuickAcceptToast = false
-                                // TODO: Implement undo logic
-                            }
-                        )
-                        .padding(.bottom, 100)
-                    }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-                
-                // Inline Confirmation Bar (medium confidence)
-                if showingInlineConfirmation, let task = lastParsedTasks.first, let response = lastParseResponse {
-                    VStack {
-                        Spacer()
-                        InlineConfirmationBar(
-                            task: task,
-                            confidence: response.effectiveConfidence,
-                            onConfirm: {
-                                saveParsedTasks(lastParsedTasks)
-                                showingInlineConfirmation = false
-                                viewModel.searchText = ""
-                            },
-                            onEdit: {
-                                // Open inline edit mode
-                                showingInlineConfirmation = false
-                                parsedTaskToEdit = task
-                                showingInlineEdit = true
-                            },
-                            onCancel: {
-                                showingInlineConfirmation = false
-                                lastParsedTasks = []
-                            }
-                        )
-                        .padding(.bottom, 80)
-                    }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-                
-                // Inline Edit Card (medium confidence → edit)
-                if showingInlineEdit, var task = parsedTaskToEdit {
-                    VStack {
-                        Spacer()
-                        InlineTaskEditView(
-                            task: Binding(
-                                get: { task },
-                                set: { parsedTaskToEdit = $0 }
-                            ),
-                            onSave: {
-                                if let finalTask = parsedTaskToEdit {
-                                    saveParsedTasks([finalTask])
-                                }
-                                showingInlineEdit = false
-                                parsedTaskToEdit = nil
-                                viewModel.searchText = ""
-                            },
-                            onCancel: {
-                                showingInlineEdit = false
-                                parsedTaskToEdit = nil
-                            }
-                        )
-                        .padding(.bottom, 80)
-                    }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-                
-                // Expanded Command Bar (low confidence / conversation)
-                if showingCommandBarExpanded {
-                    CommandBarExpanded(
-                        isExpanded: $showingCommandBarExpanded,
-                        messages: $conversationMessages,
-                        inputText: $viewModel.searchText,
-                        isProcessing: isProcessingConversation,
-                        onSend: { messageText in
-                            handleConversationReply(messageText)
-                        },
-                        onVoiceTap: {
-                            // Voice mode will be implemented in Module 4
-                        },
-                        onClose: {
-                            showingCommandBarExpanded = false
-                            conversationMessages = []
-                        }
-                    )
-                }
             }
+            .animation(.easeInOut(duration: 0.25), value: isSearchPresented)
             .navigationTitle("Docket")
                 .toolbar { toolbarContent }
                 .refreshable {
@@ -250,12 +160,14 @@ struct TaskListView: View {
                         }
                         
                         CommandBarView(
-                            text: $viewModel.searchText,
-                            onSubmit: { text, completion in
-                                handleCommandSubmit(text, completion: completion)
+                            onSubmit: { messages, completion in
+                                handleCommandSubmit(messages: messages, completion: completion)
                             },
                             onVoiceTap: {
                                 showingVoiceRecording = true
+                            },
+                            onAddTask: {
+                                showingAddTask = true
                             }
                         )
                     }
@@ -308,13 +220,57 @@ struct TaskListView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
-            HStack(spacing: 12) {
-                filterMenu
-                SearchBar(text: $viewModel.searchText, placeholder: "Search")
+            filterMenu
+        }
+        ToolbarItem(placement: .topBarLeading) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isSearchPresented = true
+                    isSearchFocused = true
+                }
+            } label: {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.blue)
             }
         }
         ToolbarItem(placement: .topBarTrailing) {
             trailingToolbar
+        }
+    }
+    
+    private var inlineSearchBar: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                    .font(.subheadline)
+                TextField("Search tasks", text: $viewModel.searchText)
+                    .focused($isSearchFocused)
+                    .font(.body)
+                    .submitLabel(.search)
+                if !viewModel.searchText.isEmpty {
+                    Button {
+                        viewModel.searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(Color(.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            
+            Button("Cancel") {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    viewModel.searchText = ""
+                    isSearchPresented = false
+                    isSearchFocused = false
+                }
+            }
+            .font(.body)
         }
     }
     
@@ -440,6 +396,7 @@ struct TaskListView: View {
             .onMove(perform: handleReorder)
         }
         .listStyle(.plain)
+        .scrollDismissesKeyboard(.interactively)
     }
     
     private func taskRow(for task: Task) -> some View {
@@ -589,58 +546,92 @@ struct TaskListView: View {
         }
     }
     
-    private func handleCommandSubmit(_ text: String, completion: @escaping (ParseResponse) -> Void) {
-        Task {
-            // Initialize conversation with first message
-            let messages = [ConversationMessage(role: "user", content: text)]
+    private func buildTaskContext(userText: String = "") -> [TaskContext] {
+        let active = Array(allTasks.filter { !$0.isCompleted }.prefix(50))
+        let recentCompleted = Array(allTasks.filter { $0.isCompleted }.prefix(20))
+        
+        let keywords = userText.lowercased()
+            .split(separator: " ")
+            .map(String.init)
+            .filter { $0.count >= 2 && !["the", "and", "for", "with", "tomorrow", "today", "next", "this", "that", "add", "create", "make", "schedule", "remind", "me", "my", "to", "a", "an", "on", "at", "by", "is", "it"].contains($0) }
+        
+        let tasksToSend: [Task]
+        if !keywords.isEmpty {
+            let matched = (active + recentCompleted)
+                .filter { task in
+                    let titleLower = task.title.lowercased()
+                    return keywords.contains { titleLower.contains($0) }
+                }
+                .prefix(10)
+            let matchedIds = Set(matched.map { $0.id.uuidString })
+            let recent = active.filter { !matchedIds.contains($0.id.uuidString) }.prefix(15)
+            tasksToSend = Array(matched + recent)
+        } else {
+            tasksToSend = Array(active.prefix(20) + recentCompleted.prefix(5))
+        }
+        
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+        
+        let dateTimeFormatter = DateFormatter()
+        dateTimeFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm"
+        dateTimeFormatter.timeZone = TimeZone.current
+        
+        return tasksToSend.map { task in
+            let dueDateString: String?
+            if let dueDate = task.dueDate {
+                if task.hasTime {
+                    dueDateString = dateTimeFormatter.string(from: dueDate)
+                } else {
+                    dueDateString = dateFormatter.string(from: dueDate)
+                }
+            } else {
+                dueDateString = nil
+            }
             
+            let priorityString: String = {
+                switch task.priority {
+                case .low: return "low"
+                case .high: return "high"
+                default: return "medium"
+                }
+            }()
+            
+            return TaskContext(
+                id: task.id.uuidString,
+                title: task.title,
+                dueDate: dueDateString,
+                priority: priorityString,
+                category: task.category,
+                isCompleted: task.isCompleted,
+                progressPercentage: task.progressPercentage,
+                isProgressEnabled: task.isProgressEnabled,
+                recurrenceRule: task.recurrenceRule
+            )
+        }
+    }
+    
+    private func buildGroceryStoreContext() -> [GroceryStoreContext] {
+        groceryStores.map { store in
+            GroceryStoreContext(
+                name: store.name,
+                itemCount: store.items.count
+            )
+        }
+    }
+    
+    private func handleCommandSubmit(messages: [ConversationMessage], completion: @escaping (ParseResponse) -> Void) {
+        let userText = messages.last?.content ?? ""
+        let existingTasks = buildTaskContext(userText: userText)
+        let groceryStoresContext = buildGroceryStoreContext()
+        _Concurrency.Task {
             do {
-                let response = try await parser.send(messages: messages)
-                await MainActor.run {
-                    self.lastParseResponse = response
-                    
-                    switch response.effectiveConfidence {
-                    case .high:
-                        // Auto-accept with toast
-                        if let tasks = response.tasks {
-                            self.lastParsedTasks = tasks
-                            self.showingQuickAcceptToast = true
-                            // Auto-save after delay
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                self.saveParsedTasks(tasks)
-                            }
-                        }
-                        
-                    case .medium:
-                        // Show inline confirmation
-                        if let tasks = response.tasks {
-                            self.lastParsedTasks = tasks
-                            self.showingInlineConfirmation = true
-                        }
-                        
-                    case .low:
-                        // Expand for conversation
-                        self.conversationMessages = [
-                            ConversationMessage(role: "user", content: text)
-                        ]
-                        if let summary = response.summary {
-                            self.conversationMessages.append(
-                                ConversationMessage(role: "assistant", content: summary)
-                            )
-                        } else if let questionText = response.text {
-                            self.conversationMessages.append(
-                                ConversationMessage(role: "assistant", content: questionText)
-                            )
-                        }
-                        self.showingCommandBarExpanded = true
-                    }
-                    
-                    // Pass response to CommandBarView for UI handling
-                    completion(response)
+                _ = try await parser.sendStreaming(messages: messages, existingTasks: existingTasks, groceryStores: groceryStoresContext) { response in
+                    _Concurrency.Task { @MainActor in completion(response) }
                 }
             } catch {
                 print("Parse error: \(error)")
-                // Return a low-confidence response on error to trigger expanded mode
                 let errorResponse = ParseResponse(
                     type: "question",
                     text: "I didn't understand that. Could you rephrase?",
@@ -651,166 +642,12 @@ struct TaskListView: View {
                     confidence: .low
                 )
                 await MainActor.run {
-                    self.conversationMessages = [
-                        ConversationMessage(role: "user", content: text),
-                        ConversationMessage(role: "assistant", content: errorResponse.text ?? "I didn't understand that. Could you rephrase?")
-                    ]
-                    self.showingCommandBarExpanded = true
                     completion(errorResponse)
                 }
             }
         }
     }
     
-    private func handleConversationReply(_ text: String) {
-        isProcessingConversation = true
-        Task {
-            defer { isProcessingConversation = false }
-            // Add user message to conversation
-            conversationMessages.append(ConversationMessage(role: "user", content: text))
-            
-            do {
-                let response = try await parser.send(messages: conversationMessages)
-                await MainActor.run {
-                    self.lastParseResponse = response
-                    
-                    switch response.type {
-                    case "complete":
-                        if let tasks = response.tasks {
-                            self.lastParsedTasks = tasks
-                            
-                            switch response.effectiveConfidence {
-                            case .high:
-                                // Auto-save and close
-                                self.saveParsedTasks(tasks)
-                                self.showingCommandBarExpanded = false
-                                self.conversationMessages = []
-                                self.showingQuickAcceptToast = true
-                                
-                            case .medium:
-                                // Show inline confirmation (close expanded first)
-                                self.showingCommandBarExpanded = false
-                                self.showingInlineConfirmation = true
-                                
-                            case .low:
-                                // Continue conversation
-                                if let summary = response.summary {
-                                    self.conversationMessages.append(
-                                        ConversationMessage(role: "assistant", content: summary)
-                                    )
-                                }
-                            }
-                        }
-                        
-                    case "question":
-                        // Continue conversation with question
-                        if let questionText = response.text {
-                            self.conversationMessages.append(
-                                ConversationMessage(role: "assistant", content: questionText)
-                            )
-                        }
-                        
-                    default:
-                        // Handle other response types
-                        if let summary = response.summary {
-                            self.conversationMessages.append(
-                                ConversationMessage(role: "assistant", content: summary)
-                            )
-                        } else if let text = response.text {
-                            self.conversationMessages.append(
-                                ConversationMessage(role: "assistant", content: text)
-                            )
-                        }
-                    }
-                }
-            } catch {
-                print("Conversation parse error: \(error)")
-                await MainActor.run {
-                    self.conversationMessages.append(
-                        ConversationMessage(role: "assistant", content: "Sorry, I had trouble processing that. Could you try again?")
-                    )
-                }
-            }
-        }
-    }
-    
-    private func saveParsedTasks(_ tasks: [ParsedTask]) {
-        Task {
-            for parsedTask in tasks {
-                let priority: Priority = {
-                    switch parsedTask.priority.lowercased() {
-                    case "low": return .low
-                    case "high": return .high
-                    default: return .medium
-                    }
-                }()
-                
-                let task = Task(
-                    title: parsedTask.title,
-                    dueDate: parsedTask.dueDate,
-                    hasTime: parsedTask.hasTime,
-                    priority: priority,
-                    category: parsedTask.category,
-                    notes: parsedTask.notes,
-                    syncStatus: .pending
-                )
-                task.taskSource = "command_bar"
-                task.voiceSnapshotData = try? JSONEncoder().encode(parsedTask.toVoiceSnapshot())
-                
-                // Handle checklist items / templates
-                if let templateName = parsedTask.useTemplate {
-                    // Load items from grocery store template
-                    if let store = groceryStores.first(where: { $0.name.localizedCaseInsensitiveContains(templateName) }) {
-                        let items = store.items.enumerated().map { index, name in
-                            ChecklistItem(
-                                id: UUID(),
-                                name: name,
-                                isChecked: false,
-                                sortOrder: index,
-                                quantity: 1,
-                                isStarred: false
-                            )
-                        }
-                        task.checklistItems = items
-                    }
-                } else if let itemNames = parsedTask.checklistItems, !itemNames.isEmpty {
-                    // Create checklist items from AI-suggested names
-                    let items = itemNames.enumerated().map { index, name in
-                        let capitalizedName = name.split(separator: " ")
-                            .map { $0.prefix(1).uppercased() + $0.dropFirst().lowercased() }
-                            .joined(separator: " ")
-                        return ChecklistItem(
-                            id: UUID(),
-                            name: capitalizedName,
-                            isChecked: false,
-                            sortOrder: index,
-                            quantity: 1,
-                            isStarred: false
-                        )
-                    }
-                    task.checklistItems = items
-                }
-                
-                // Handle sharing
-                if let shareWith = parsedTask.shareWith, !shareWith.isEmpty {
-                    task.shareWith = shareWith
-                    // Share resolution happens in sync or background
-                }
-                
-                modelContext.insert(task)
-                
-                // Schedule notification if due date exists
-                if parsedTask.dueDate != nil {
-                    await NotificationManager.shared.scheduleNotification(for: task)
-                }
-                
-                // Push to sync engine
-                await syncEngine.pushTask(task)
-            }
-            
-            try? modelContext.save()
-        }
-    }
 }
 
 #Preview {

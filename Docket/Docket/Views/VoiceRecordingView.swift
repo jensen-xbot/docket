@@ -496,11 +496,30 @@ struct VoiceRecordingView: View {
         }
     }
     
-    /// Builds TaskContext array from active + recent completed tasks (capped for context window)
-    private func buildTaskContext() -> [TaskContext] {
+    /// Builds TaskContext array with relevance-based filtering: if user text has keywords, send matching + recent; else send 20 active + 5 completed.
+    private func buildTaskContext(userText: String = "") -> [TaskContext] {
+        let keywords = userText.lowercased()
+            .split(separator: " ")
+            .map(String.init)
+            .filter { $0.count >= 2 && !["the", "and", "for", "with", "tomorrow", "today", "next", "this", "that", "add", "create", "make", "schedule", "remind", "me", "my", "to", "a", "an", "on", "at", "by", "is", "it"].contains($0) }
+        
         let active = Array(activeTasks.prefix(50))
         let recentCompleted = Array(completedTasks.prefix(20))
-        let tasksToSend = active + recentCompleted
+        
+        let tasksToSend: [Task]
+        if !keywords.isEmpty {
+            let matched = (active + recentCompleted)
+                .filter { task in
+                    let titleLower = task.title.lowercased()
+                    return keywords.contains { titleLower.contains($0) }
+                }
+                .prefix(10)
+            let matchedIds = Set(matched.map { $0.id.uuidString })
+            let recent = active.filter { !matchedIds.contains($0.id.uuidString) }.prefix(15)
+            tasksToSend = Array(matched + recent)
+        } else {
+            tasksToSend = Array(active.prefix(20) + recentCompleted.prefix(5))
+        }
         
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
@@ -569,14 +588,27 @@ struct VoiceRecordingView: View {
         state = .processing
         errorMessage = nil
         
-        // Build task context (only incomplete tasks, capped at 50)
-        let existingTasks = buildTaskContext()
+        // Build task context (relevance-filtered when user mentions keywords, else recent tasks)
+        let existingTasks = buildTaskContext(userText: text)
         
         // Build grocery store context
         let groceryStoresContext = buildGroceryStoreContext()
         
         do {
-            let response = try await parser.send(messages: messages, existingTasks: existingTasks, groceryStores: groceryStoresContext)
+            var ttsStartedInCallback = false
+            let response = try await parser.sendStreaming(messages: messages, existingTasks: existingTasks, groceryStores: groceryStoresContext) { [self] earlyResponse in
+                // Start TTS immediately for question type so playback overlaps with any post-processing
+                if earlyResponse.type == "question", let text = earlyResponse.text, !text.isEmpty {
+                    ttsStartedInCallback = true
+                    ttsManager.speakWithBoundedSync(text: text, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
+                        state = .speaking
+                        messages.append(ConversationMessage(role: "assistant", content: text))
+                    }, onFinish: { [self] in
+                        state = .listening
+                        _Concurrency.Task { await speechManager.startRecording() }
+                    })
+                }
+            }
             
             // Reset timeout on successful response
             startConversationTimeout()
@@ -672,13 +704,15 @@ struct VoiceRecordingView: View {
                 }
             } else {
                 let question = response.text ?? ""
-                ttsManager.speakWithBoundedSync(text: question, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
-                    messages.append(ConversationMessage(role: "assistant", content: question))
-                    state = .speaking
-                }, onFinish: { [self] in
-                    state = .listening
-                    _Concurrency.Task { await speechManager.startRecording() }
-                })
+                if !ttsStartedInCallback {
+                    ttsManager.speakWithBoundedSync(text: question, boundedWait: 0.75, accessToken: parser.lastAccessToken, onTextReveal: { [self] in
+                        messages.append(ConversationMessage(role: "assistant", content: question))
+                        state = .speaking
+                    }, onFinish: { [self] in
+                        state = .listening
+                        _Concurrency.Task { await speechManager.startRecording() }
+                    })
+                }
             }
         } catch {
             // Error haptic

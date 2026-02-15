@@ -39,7 +39,7 @@
 - **Speech Recognition:** Apple SFSpeechRecognizer (on-device, primary) / OpenAI Whisper API (opt-in fallback)
 - **Audio Capture:** AVAudioEngine with buffer processing
 - **Transport:** HTTPS REST per turn (Supabase `functions.invoke`) — no WebSocket
-- **NLU:** gpt-4.1-mini via OpenRouter → Supabase Edge Function
+- **NLU:** Gemini 2.5 Flash via OpenRouter → Supabase Edge Function (streaming SSE)
 - **TTS (Readback):** OpenAI gpt-4o-mini-tts (streaming PCM, primary) / Apple AVSpeechSynthesizer (fallback)
 - **TTS Playback:** AVAudioEngine + AVAudioPlayerNode for streaming; 24kHz 16-bit mono PCM
 - **TTS Voices:** 13 voices (alloy, ash, ballad, coral, echo, fable, marin, nova, onyx, sage, shimmer, verse, cedar)

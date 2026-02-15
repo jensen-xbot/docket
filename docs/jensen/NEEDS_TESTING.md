@@ -31,6 +31,7 @@
 
 ### Module 4: Voice mode integration
 - [ ] Tap voice button → VoiceRecordingView sheet opens → **recording auto-starts** (no mic tap)
+- [ ] Silence detection: short utterance ("yes") stops within ~1.5s; longer utterance within ~2.2s
 - [ ] Speak task → transcription appears as chat bubble
 - [ ] AI response plays via TTS
 - [ ] Can switch to text input mid-conversation
@@ -133,8 +134,9 @@
 
 - [ ] Cold start to interactive < 2 seconds
 - [ ] Voice transcription latency < 500ms
-- [ ] Edge Function response < 2 seconds
+- [ ] Edge Function response < 2 seconds (streaming SSE)
 - [ ] TTS playback starts < 500ms
+- [ ] End-to-end voice: silence → AI audio < 2s for simple utterances (post-latency-optimization)
 - [ ] Today view scrolls smoothly with 100+ tasks
 - [ ] Memory usage stable during voice session
 
@@ -151,6 +153,15 @@
 ---
 
 ---
+
+## Voice Latency Optimizations (2026-02-14)
+
+See [VOICE_LATENCY_OPTIMIZATION_2026-02-14.md](VOICE_LATENCY_OPTIMIZATION_2026-02-14.md) for full changelog.
+
+- [ ] Voice response feels faster (silence → AI audio < 2s for simple utterances)
+- [ ] Question-type responses: TTS starts immediately (overlap with processing)
+- [ ] Task updates/deletes work with relevance-filtered context (e.g., "mark dentist done" with many tasks)
+- [ ] VoiceModeContainer: task context and grocery stores passed correctly
 
 ## Voice UX Improvements (2026-02-14)
 

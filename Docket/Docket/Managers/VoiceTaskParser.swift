@@ -98,18 +98,19 @@ class VoiceTaskParser {
     }
     
     func send(messages: [ConversationMessage], existingTasks: [TaskContext]? = nil, groceryStores: [GroceryStoreContext]? = nil, personalization: VoicePersonalization? = nil) async throws -> ParseResponse {
+        try await sendStreaming(messages: messages, existingTasks: existingTasks, groceryStores: groceryStores, personalization: personalization, onResponse: nil)
+    }
+    
+    /// Streaming variant: fires onResponse as soon as the full response is decoded so TTS can start immediately (overlaps with caller processing).
+    func sendStreaming(messages: [ConversationMessage], existingTasks: [TaskContext]? = nil, groceryStores: [GroceryStoreContext]? = nil, personalization: VoicePersonalization? = nil, onResponse: ((ParseResponse) -> Void)? = nil) async throws -> ParseResponse {
         isProcessing = true
         errorMessage = nil
         defer { isProcessing = false }
         
-        // Format today's date as yyyy-MM-dd
         let today = ISO8601DateFormatter().string(from: Date()).prefix(10)
         let timezone = TimeZone.current.identifier
-        
-        // Use passed personalization or cached (from prefetch)
         let personalizationToUse = personalization ?? cachedProfile
         
-        // Build request body
         let requestBody = ParseRequest(
             messages: messages,
             today: String(today),
@@ -120,44 +121,115 @@ class VoiceTaskParser {
             personalization: personalizationToUse
         )
         
-        do {
-            // Get a fresh session and explicitly pass the JWT token.
-            // The SDK's automatic auth sometimes doesn't match the
-            // Edge Functions gateway's JWT verification format.
-            let session = try await supabase.auth.session
-            print("[VoiceTaskParser] Auth OK — user: \(session.user.id), token expires: \(session.expiresAt)")
-            
-            let parseResponse: ParseResponse = try await supabase.functions.invoke(
-                "parse-voice-tasks",
-                options: FunctionInvokeOptions(
-                    headers: ["Authorization": "Bearer \(session.accessToken)"],
-                    body: requestBody
-                )
-            )
-            
-            #if DEBUG
-            print("[VoiceTaskParser] Response — type: \(parseResponse.type), taskId: \(parseResponse.taskId ?? "nil"), summary: \(parseResponse.summary ?? "nil"), text: \(parseResponse.text ?? "nil"), tasks: \(parseResponse.tasks?.count ?? 0), changes: \(parseResponse.changes != nil ? "present" : "nil")")
-            #endif
-            
-            lastAccessToken = session.accessToken
-            return parseResponse
-        } catch let error as FunctionsError {
-            // Detailed logging for Edge Function errors
-            switch error {
-            case .httpError(let code, let data):
-                let body = String(data: data, encoding: .utf8) ?? "(no body)"
-                print("[VoiceTaskParser] HTTP \(code): \(body)")
-                errorMessage = "Server error (\(code)): \(body)"
-            case .relayError:
-                print("[VoiceTaskParser] Relay error (Edge Function boot failure)")
-                errorMessage = "Voice service temporarily unavailable"
-            }
-            throw error
-        } catch {
-            print("[VoiceTaskParser] Error: \(error)")
-            errorMessage = "Failed to parse voice input: \(error.localizedDescription)"
-            throw error
+        let session = try await supabase.auth.session
+        lastAccessToken = session.accessToken
+        
+        guard let url = URL(string: "\(SupabaseConfig.urlString)/functions/v1/parse-voice-tasks") else {
+            throw NSError(domain: "VoiceTaskParser", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid parse URL"])
         }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(SupabaseConfig.anonKey, forHTTPHeaderField: "apikey")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 20
+        request.httpBody = try JSONEncoder().encode(requestBody)
+        
+        let (bytes, response) = try await URLSession.shared.bytes(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NSError(domain: "VoiceTaskParser", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            var errorData = Data()
+            for try await byte in bytes { errorData.append(byte) }
+            let errorBody = String(data: errorData, encoding: .utf8) ?? ""
+            if let errData = errorBody.data(using: .utf8),
+               let err = try? JSONDecoder().decode([String: String].self, from: errData),
+               let msg = err["error"] {
+                errorMessage = msg
+                throw NSError(domain: "VoiceTaskParser", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: msg])
+            }
+            errorMessage = "Server error (\(httpResponse.statusCode))"
+            throw NSError(domain: "VoiceTaskParser", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Server error (\(httpResponse.statusCode))"])
+        }
+        
+        // Consume SSE stream and accumulate content
+        var buffer = ""
+        var aiContent = ""
+        for try await byte in bytes {
+            buffer.append(Character(Unicode.Scalar(byte)))
+            let lines = buffer.split(separator: "\n", omittingEmptySubsequences: false)
+            buffer = String(lines.last ?? Substring())
+            for line in lines.dropLast() {
+                let s = String(line)
+                if s.hasPrefix("data: ") {
+                    let data = String(s.dropFirst(6))
+                    if data == "[DONE]" { continue }
+                    if let jsonData = data.data(using: .utf8),
+                       let parsed = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+                       let choices = parsed["choices"] as? [[String: Any]],
+                       let first = choices.first,
+                       let delta = first["delta"] as? [String: Any],
+                       let content = delta["content"] as? String {
+                        aiContent += content
+                    }
+                }
+            }
+        }
+        
+        guard !aiContent.isEmpty else {
+            errorMessage = "Invalid AI response"
+            throw NSError(domain: "VoiceTaskParser", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid AI response"])
+        }
+        
+        let parseResponse = try Self.normalizeAndDecode(aiContent: aiContent, onResponse: onResponse)
+        
+        #if DEBUG
+        print("[VoiceTaskParser] Response — type: \(parseResponse.type), taskId: \(parseResponse.taskId ?? "nil"), summary: \(parseResponse.summary ?? "nil"), text: \(parseResponse.text ?? "nil"), tasks: \(parseResponse.tasks?.count ?? 0), changes: \(parseResponse.changes != nil ? "present" : "nil")")
+        #endif
+        
+        return parseResponse
+    }
+    
+    /// Decode raw AI JSON, apply normalization (valid types, task IDs), and optionally fire onResponse for TTS overlap.
+    private static func normalizeAndDecode(aiContent: String, onResponse: ((ParseResponse) -> Void)?) throws -> ParseResponse {
+        guard let jsonData = aiContent.data(using: .utf8) else {
+            throw NSError(domain: "VoiceTaskParser", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid AI response encoding"])
+        }
+        
+        var json = (try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]) ?? [:]
+        
+        // Ensure task IDs
+        if var tasks = json["tasks"] as? [[String: Any]] {
+            for i in tasks.indices {
+                if tasks[i]["id"] == nil {
+                    tasks[i]["id"] = UUID().uuidString
+                }
+            }
+            json["tasks"] = tasks
+        }
+        
+        // Normalize invalid type to question
+        let validTypes = ["question", "complete", "update", "delete"]
+        if !validTypes.contains(json["type"] as? String ?? "") {
+            json["type"] = "question"
+            json["text"] = json["text"] ?? json["summary"] ?? json["message"] ?? json["response"] ?? "What would you like to do?"
+            json["tasks"] = nil
+            json["taskId"] = nil
+            json["changes"] = nil
+            json["summary"] = nil
+        }
+        
+        let normalizedData = try JSONSerialization.data(withJSONObject: json)
+        let response = try JSONDecoder().decode(ParseResponse.self, from: normalizedData)
+        
+        // Fire onResponse immediately so TTS can start while caller processes tasks
+        onResponse?(response)
+        
+        return response
     }
     
     /// Transcribes audio using Whisper API via Edge Function
